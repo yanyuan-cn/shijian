@@ -60,8 +60,9 @@ class Settings {
   static set readerTurn(String v) => _p.setString('readerTurn', v);
 
   // ---------- 更新 ----------
+  /// GitHub 仓库 owner/name。应用内更新查的是它的 latest release。
   static String get updateRepo =>
-      _p.getString('updateRepo') ?? 'shijian-app/shijian';
+      _p.getString('updateRepo') ?? 'yanyuan-cn/shijian';
   static set updateRepo(String v) => _p.setString('updateRepo', v.trim());
 
   static String get updateChannel =>
