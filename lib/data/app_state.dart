@@ -28,10 +28,11 @@ class App extends ChangeNotifier {
   String? error;
   List<Item> all = const [];
 
-  Future<void> init() async {
+  /// [baseDir] 只给测试用，正式运行走 path_provider。
+  Future<void> init({Directory? baseDir}) async {
     try {
       await Settings.init();
-      supportDir = await getApplicationSupportDirectory();
+      supportDir = baseDir ?? await getApplicationSupportDirectory();
       blobs = await BlobStore.open(supportDir);
       final db = await Db.open(supportDir.path);
       repo = Repo(db, blobs);

@@ -360,30 +360,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "0.2.2"
-  jni:
-    dependency: transitive
-    description:
-      name: jni
-      sha256: "822c3f004742158b80b558773ebed29891f407058d5798992436a68bdf14ccda"
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "1.2.0"
-  jni_flutter:
-    dependency: transitive
-    description:
-      name: jni_flutter
-      sha256: "586594ad345b403bda8a794b0b8a9e34298238b86c2a7d7f15160b092fe9ef3d"
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "1.1.0"
-  jni_util:
-    dependency: transitive
-    description:
-      name: jni_util
-      sha256: "1ba86da04a5f2bf18fde2edb235587e70c5b0fc5bd4ba955f46b00942c3fc35f"
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "1.0.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -472,14 +448,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "9.6.4"
-  package_config:
-    dependency: transitive
-    description:
-      name: package_config
-      sha256: ffcf4cf3d6c0b74ac43708d9f56625506e8a68aa935abe9d267a7330f320eb5d
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "3.0.0"
   package_info_plus:
     dependency: "direct main"
     description:
@@ -513,13 +481,13 @@ packages:
     source: hosted
     version: "2.1.6"
   path_provider_android:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: path_provider_android
-      sha256: "69cbd515a62b94d32a7944f086b2f82b4ac40a1d45bebfc00813a430ab2dabcd"
+      sha256: c464428172cb986b758c6d1724c603097febb8fb855aa265aeecc9280c294d4a
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "2.3.1"
+    version: "2.2.12"
   path_provider_foundation:
     dependency: transitive
     description:
@@ -617,13 +585,13 @@ packages:
     source: hosted
     version: "2.5.6"
   shared_preferences_android:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: shared_preferences_android
-      sha256: "137dedccacb394b8f470d6c9b435ffc3d33faaa6ce2949c4f54a61007d64396d"
+      sha256: "480ba4345773f56acda9abf5f50bd966f581dac5d514e5fc4a18c62976bbba7e"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "2.5.5"
+    version: "2.3.2"
   shared_preferences_foundation:
     dependency: transitive
     description:
