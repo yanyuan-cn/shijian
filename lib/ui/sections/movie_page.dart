@@ -120,7 +120,7 @@ class _Poster extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            BlobImage(item.cover, cacheWidth: 360),
+            CoverArt(item: item, cacheWidth: 360),
             // 底部压一层渐变，保证白字永远读得清
             const DecoratedBox(
               decoration: BoxDecoration(

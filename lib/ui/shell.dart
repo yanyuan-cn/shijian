@@ -8,15 +8,18 @@ import 'package:flutter/material.dart';
 
 import '../core/model.dart';
 import '../data/app_state.dart';
-import 'form/item_form.dart';
+import 'detail_sheet.dart';
+import 'drawer_panel.dart';
 import 'kit.dart';
 import 'pages/me_page.dart';
 import 'pages/search_page.dart';
+import 'sections/book_detail.dart';
 import 'sections/book_page.dart';
 import 'sections/link_page.dart';
 import 'sections/movie_page.dart';
 import 'sections/pic_page.dart';
 import 'sections/tv_page.dart';
+import 'sheet_add.dart';
 import 'theme.dart';
 
 class Shell extends StatefulWidget {
@@ -55,6 +58,46 @@ class _ShellState extends State<Shell> {
         _ => ST.book,
       };
 
+  /// 抽屉展示的板块：我的页显示五个入口，其余显示当前板块的条目。
+  String get _drawerType => switch (_tab) {
+        0 => ST.book,
+        1 => _media,
+        2 => ST.pic,
+        3 => ST.link,
+        _ => 'me',
+      };
+
+  void _openItem(Item it) {
+    Future.delayed(const Duration(milliseconds: 130), () {
+      if (!mounted) return;
+      if (it.type == ST.book) {
+        Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => BookDetailPage(item: it)));
+      } else {
+        showItemSheet(context, it);
+      }
+    });
+  }
+
+  void _goSection(String type) {
+    setState(() {
+      switch (type) {
+        case ST.book:
+          _tab = 0;
+        case ST.movie:
+          _tab = 1;
+          _media = ST.movie;
+        case ST.tv:
+          _tab = 1;
+          _media = ST.tv;
+        case ST.pic:
+          _tab = 2;
+        case ST.link:
+          _tab = 3;
+      }
+    });
+  }
+
   void _openSearch() {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -67,7 +110,7 @@ class _ShellState extends State<Shell> {
   }
 
   void _openAdd() {
-    ItemForm.show(context, type: _addType);
+    AddSheet.show(context);
   }
 
   @override
@@ -75,10 +118,11 @@ class _ShellState extends State<Shell> {
     return Scaffold(
       key: _scaffold,
       backgroundColor: C.bg,
-      drawer: _Drawer(onGoTab: (i) {
-        Navigator.pop(context);
-        setState(() => _tab = i);
-      }),
+      drawer: SideDrawer(
+        type: _drawerType,
+        onTapItem: _openItem,
+        onTapSection: _goSection,
+      ),
       body: SafeArea(
         bottom: false,
         child: ListenableBuilder(
@@ -203,41 +247,38 @@ class _Segment extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 46,
-      color: C.bar,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFF181E28),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        padding: const EdgeInsets.all(3),
-        child: Row(
-          children: [
-            for (final e in const [(ST.movie, '电影'), (ST.tv, '剧集')])
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onChanged(e.$1),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: value == e.$1 ? const Color(0xFF2A3342) : null,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(e.$2,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: value == e.$1
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: value == e.$1 ? C.text : C.text3,
-                        )),
-                  ),
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: Color(0xE012161D),
+        border: Border(bottom: BorderSide(color: C.line)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final e in const [(ST.movie, '电影'), (ST.tv, '剧集')]) ...[
+            GestureDetector(
+              onTap: () => onChanged(e.$1),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                decoration: BoxDecoration(
+                  color: value == e.$1 ? C.accent : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
                 ),
+                child: Text(e.$2,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight:
+                          value == e.$1 ? FontWeight.w600 : FontWeight.w400,
+                      color: value == e.$1 ? const Color(0xFF0B0F16) : C.text2,
+                    )),
               ),
+            ),
+            if (e.$1 == ST.movie) const SizedBox(width: 8),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -298,81 +339,3 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-class _Drawer extends StatelessWidget {
-  const _Drawer({required this.onGoTab});
-  final ValueChanged<int> onGoTab;
-
-  @override
-  Widget build(BuildContext context) {
-    return Drawer(
-      backgroundColor: C.panel,
-      width: 268,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 18),
-              child: Row(
-                children: [
-                  Text('拾间',
-                      style: TextStyle(
-                          fontFamily: T.serif,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: C.text)),
-                  SizedBox(width: 8),
-                  Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text('收藏在，就找得到', style: T.small),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            _drawerItem(Icons.grid_view_rounded, '全部板块', () => onGoTab(0)),
-            _drawerItem(Icons.search, '全局搜索', () {
-              Navigator.pop(context);
-              Navigator.of(context).push(PageRouteBuilder(
-                opaque: false,
-                barrierColor: Colors.black54,
-                pageBuilder: (_, a, __) =>
-                    FadeTransition(opacity: a, child: const SearchPage()),
-              ));
-            }),
-            _drawerItem(Icons.file_upload_outlined, '导入 / 导出', () {
-              Navigator.pop(context);
-              toast(context, '在「我的 › 数据」里');
-            }),
-            const Spacer(),
-            _drawerItem(Icons.settings_outlined, '设置', () {
-              Navigator.pop(context);
-              onGoTab(4);
-            }),
-            const Padding(
-              padding: EdgeInsets.all(20),
-              child: Text('v1.0.0 · 本地优先，不联网也能用', style: T.small),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _drawerItem(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 19, color: C.text2),
-            const SizedBox(width: 14),
-            Text(label,
-                style: const TextStyle(fontSize: 14, color: C.text)),
-          ],
-        ),
-      ),
-    );
-  }
-}

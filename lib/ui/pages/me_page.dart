@@ -14,6 +14,7 @@ import '../../platform/updater.dart';
 import '../kit.dart';
 import '../theme.dart';
 import 'sources_page.dart';
+import 'html_page.dart';
 
 class MePage extends StatefulWidget {
   const MePage({super.key});
@@ -24,6 +25,7 @@ class MePage extends StatefulWidget {
 
 class _MePageState extends State<MePage> {
   String _ver = '';
+  String _usage = '';
 
   @override
   void initState() {
@@ -31,6 +33,18 @@ class _MePageState extends State<MePage> {
     PackageInfo.fromPlatform().then((p) {
       if (mounted) setState(() => _ver = '${p.version} (${p.buildNumber})');
     });
+    _loadUsage();
+  }
+
+  /// 存储占用：走一次目录统计，算完再 setState。
+  /// 以前用了个 static 变量 + 无通知的刷新，结果永远停在「计算中…」。
+  Future<void> _loadUsage() async {
+    try {
+      final bytes = await App.I.blobs.usage();
+      if (mounted) setState(() => _usage = fmtBytes(bytes));
+    } catch (_) {
+      if (mounted) setState(() => _usage = '—');
+    }
   }
 
   @override
@@ -39,8 +53,6 @@ class _MePageState extends State<MePage> {
       listenable: App.I,
       builder: (context, _) {
         final all = App.I.all;
-        final usage = _UsageHolder.usage;
-        _UsageHolder.refresh();
         return ListView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -70,10 +82,15 @@ class _MePageState extends State<MePage> {
             _group('关于', [
               _tile('版本', _ver.isEmpty ? '读取中…' : _ver, Icons.info_outline,
                   () => Updater.check(context, manual: true)),
-              _tile('存储', usage.isEmpty ? '计算中…' : usage,
-                  Icons.folder_outlined, null),
+              _tile('存储', _usage.isEmpty ? '计算中…' : _usage,
+                  Icons.folder_outlined, _loadUsage),
               _tile('说明', '本地优先：不联也能用，数据只在这台手机上',
                   Icons.lock_outline, null),
+              _tile('HTML 对照预览', '用 WebView 跑旧版单文件，看原版长什么样',
+                  Icons.code_outlined, () {
+                Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const HtmlPage()));
+              }),
             ]),
             const SizedBox(height: 22),
             Center(
@@ -186,22 +203,5 @@ class _MePageState extends State<MePage> {
         ),
       ),
     );
-  }
-}
-
-/// 存储占用算起来要遍历文件，缓存一下，别每帧都跑。
-class _UsageHolder {
-  static String usage = '';
-  static bool _running = false;
-
-  static void refresh() {
-    if (_running || usage.isNotEmpty) return;
-    _running = true;
-    App.I.blobs.usage().then((bytes) {
-      usage = fmtBytes(bytes);
-      _running = false;
-    }).catchError((_) {
-      _running = false;
-    });
   }
 }

@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../core/model.dart';
 import '../data/app_state.dart';
 import 'theme.dart';
 
@@ -123,6 +124,90 @@ class BlobImage extends StatelessWidget {
         alignment: Alignment.center,
         child: const Icon(Icons.image_outlined, size: 20, color: C.text3),
       );
+}
+
+/// 封面：有图就用图，没图用「文字封面」兜底。
+///
+/// 原来的空态是灰底加一个图片图标，一屏三张全是灰方块，很难看。
+/// 这里用条目自己的 id 派生一组双色渐变 + 竖排书名，看起来像是设计过的封面，
+/// 也顺便让「还没配封面的收藏」一眼能认出是哪一本。
+class CoverArt extends StatelessWidget {
+  const CoverArt({
+    super.key,
+    required this.item,
+    this.fit = BoxFit.cover,
+    this.cacheWidth,
+    this.fontSize,
+    this.showYear = true,
+  });
+
+  final Item item;
+  final BoxFit fit;
+  final int? cacheWidth;
+  final double? fontSize;
+  final bool showYear;
+
+  static const List<List<Color>> _duo = [
+    [Color(0xFF2A3B58), Color(0xFF121A28)],
+    [Color(0xFF1F4B41), Color(0xFF0C211C)],
+    [Color(0xFF7A4A22), Color(0xFF301B0C)],
+    [Color(0xFF5B2540), Color(0xFF250D18)],
+    [Color(0xFF3D4A66), Color(0xFF171E2B)],
+    [Color(0xFF2F4A44), Color(0xFF111E1B)],
+    [Color(0xFF4A3D66), Color(0xFF1B1526)],
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final h = item.cover;
+    if (h != null && h.isNotEmpty && App.I.blobs.fileOf(h).existsSync()) {
+      return BlobImage(h, fit: fit, cacheWidth: cacheWidth);
+    }
+    final seed = (item.id.hashCode & 0x7fffffff) % _duo.length;
+    final pair = _duo[seed];
+    final title = item.title.trim();
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: pair,
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Center(
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: T.serif,
+                  fontSize: fontSize ?? 15,
+                  height: 1.35,
+                  color: Colors.white.withValues(alpha: 0.92),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          if (showYear && (item.year ?? '').isNotEmpty)
+            Text(
+              item.year!,
+              style: T.small.copyWith(
+                fontSize: 10,
+                letterSpacing: 1.2,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// 板块空态。六个板块共用一套文案位，避免每个页面自己写一遍。

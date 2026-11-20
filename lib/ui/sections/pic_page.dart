@@ -134,7 +134,7 @@ class _Polaroid extends StatelessWidget {
                 child: SizedBox(
                   width: width,
                   height: math.max(60, width / ar),
-                  child: BlobImage(item.cover, cacheWidth: 700),
+                  child: CoverArt(item: item, cacheWidth: 700),
                 ),
               ),
               const SizedBox(height: 6),
