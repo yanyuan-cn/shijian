@@ -145,7 +145,7 @@ class _Poster extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              CoverArt(item: item, cacheWidth: 360),
+              CoverArt(item: item, cacheWidth: 360, showTitle: false),
               // 原版 .poster::after：上白下黑的薄纱，保证底部白字读得清
               const DecoratedBox(
                 decoration: BoxDecoration(

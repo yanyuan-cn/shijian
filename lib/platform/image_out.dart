@@ -103,6 +103,17 @@ Future<bool> shareFile(String path,
 /// 是否允许「安装未知应用」。
 Future<bool> canInstallApk() => _call('canInstall', {});
 
+/// 设备主 ABI（arm64-v8a / armeabi-v7a / x86_64 …）。挑 Update 分包时要用：
+/// 装错 ABI 的包，PackageInstaller 会直接失败。
+Future<String> deviceAbi() async {
+  try {
+    final r = await _ch.invokeMethod<String>('abi');
+    return (r ?? '').trim();
+  } catch (_) {
+    return '';
+  }
+}
+
 Future<void> openInstallSettings() =>
     _call('installSettings', {}).then((_) {});
 

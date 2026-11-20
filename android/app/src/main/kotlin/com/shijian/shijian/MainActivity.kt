@@ -68,6 +68,9 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                         "canInstall" -> result.success(canInstall())
+                        "abi" -> result.success(
+                            android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: ""
+                        )
                         "installSettings" -> {
                             openInstallSettings()
                             result.success(true)

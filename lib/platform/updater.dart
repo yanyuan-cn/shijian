@@ -58,17 +58,26 @@ class Updater {
           .whereType<Map>()
           .where((a) => (a['name'] ?? '').toString().endsWith('.apk'))
           .toList();
-      // 优先 arm64 的分包（体积是 universal 的一半，下载快一倍）
-      assets.sort((a, b) {
-        int w(Map m) {
-          final n = (m['name'] ?? '').toString();
-          if (n.contains('arm64')) return 0;
-          if (n.contains('armeabi')) return 1;
-          return 2;
-        }
+      // 按设备 ABI 挑分包：arm64-v8a / armeabi-v7a / x86_64 / x86。
+      // 装错架构的包 PackageInstaller 会静默失败，这是最容易踩的坑。
+      final abi = (await deviceAbi()).toLowerCase();
+      String want() {
+        if (abi.contains('arm64')) return 'arm64';
+        if (abi.contains('armeabi')) return 'armeabi';
+        if (abi.contains('x86_64')) return 'x86_64';
+        if (abi.contains('x86')) return 'x86_';
+        return 'universal';
+      }
 
-        return w(a).compareTo(w(b));
-      });
+      final wanted = want();
+      int weight(Map m) {
+        final n = (m['name'] ?? '').toString().toLowerCase();
+        if (n.contains(wanted)) return 0;
+        if (n.contains('universal')) return 1;
+        return 2;
+      }
+
+      assets.sort((a, b) => weight(a).compareTo(weight(b)));
       if (assets.isNotEmpty) {
         apk = (assets.first['browser_download_url'] ?? '').toString();
         size = ((assets.first['size'] as num?) ?? 0).toInt();
@@ -190,7 +199,7 @@ class Updater {
         try {
           if (i > 0) label.value = '换线路重试（第 ${i + 1} 个）…';
           if (await file.exists()) await file.delete();
-          await _fetchTo(url, file, rel.apkSize, progress);
+          await _fetchTo(url, file, rel.apkSize, progress, label);
           apk = file;
           break;
         } catch (e) {
@@ -244,48 +253,73 @@ class Updater {
     }
   }
 
-  /// 流式下载：15 秒内没下到 4% 就判定这条线路太慢，抛错换下一个。
+  /// 断点续传式下载：中途被重置就带着已下载的字节重发（Range 请求），
+  /// 同一条线路最多重试 5 次；15 秒内几乎没进度就判定线路不可用，抛错换下一个。
   static Future<void> _fetchTo(
     String url,
     File file,
     int expect,
     ValueNotifier<double> progress,
+    ValueNotifier<String> label,
   ) async {
-    final dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 12),
-      receiveTimeout: const Duration(seconds: 30),
-      followRedirects: true,
-      maxRedirects: 6,
-      validateStatus: (s) => s != null && s < 400,
-    ));
-    final resp = await dio.get<ResponseBody>(
-      url,
-      options: Options(responseType: ResponseType.stream),
-    );
-    final total =
-        int.tryParse(resp.headers.value(Headers.contentLengthHeader) ?? '') ??
-            expect;
-    final sink = file.openWrite();
-    var got = 0;
-    final sw = Stopwatch()..start();
-    var checked = false;
-    try {
-      await for (final chunk in resp.data!.stream) {
-        sink.add(chunk);
-        got += chunk.length;
-        if (total > 0) progress.value = got / total;
-        if (!checked && sw.elapsed > const Duration(seconds: 15)) {
-          checked = true;
-          if (total > 0 && got / total < 0.04) {
-            throw StateError('线路太慢');
+    var rounds = 0;
+    while (true) {
+      final have = await file.exists() ? await file.length() : 0;
+      if (expect > 0 && have >= expect) {
+        if (expect > 0 && await file.length() != expect) {
+          throw StateError('包大小不对');
+        }
+        return;
+      }
+      if (rounds >= 5) throw StateError('线路反复中断');
+      rounds++;
+      if (rounds > 1) {
+        label.value = '断线续传（第 $rounds 次）…';
+        progress.value = expect > 0 ? have / expect : 0;
+      }
+
+      final dio = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 12),
+        receiveTimeout: const Duration(seconds: 30),
+        followRedirects: true,
+        maxRedirects: 6,
+        validateStatus: (s) => s != null && (s == 200 || s == 206),
+      ));
+      final resp = await dio.get<ResponseBody>(
+        url,
+        options: Options(
+          responseType: ResponseType.stream,
+          headers: have > 0 ? {'Range': 'bytes=$have-'} : null,
+        ),
+      );
+      final append = resp.statusCode == 206 && have > 0;
+      final sink = file.openWrite(mode: append ? FileMode.append : FileMode.write);
+      var got = append ? have : 0;
+      final sw = Stopwatch()..start();
+      final startAt = got;
+      var checked = false;
+      var broke = false;
+      try {
+        await for (final chunk in resp.data!.stream) {
+          sink.add(chunk);
+          got += chunk.length;
+          if (expect > 0) progress.value = got / expect;
+          if (!checked && sw.elapsed > const Duration(seconds: 15)) {
+            checked = true;
+            final moved = got - startAt;
+            if (expect > 0 && moved / expect < 0.02) {
+              throw StateError('线路太慢');
+            }
           }
         }
+      } on StateError {
+        rethrow;
+      } catch (_) {
+        broke = true;
+      } finally {
+        await sink.close();
       }
-    } finally {
-      await sink.close();
-    }
-    if (expect > 0 && await file.length() != expect) {
-      throw StateError('包大小不对');
+      if (!broke) return;
     }
   }
 

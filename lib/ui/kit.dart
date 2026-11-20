@@ -139,6 +139,7 @@ class CoverArt extends StatelessWidget {
     this.cacheWidth,
     this.fontSize,
     this.showYear = true,
+    this.showTitle = true,
   });
 
   final Item item;
@@ -146,6 +147,7 @@ class CoverArt extends StatelessWidget {
   final int? cacheWidth;
   final double? fontSize;
   final bool showYear;
+  final bool showTitle;
 
   static const List<List<Color>> _duo = [
     [Color(0xFF2A3B58), Color(0xFF121A28)],
@@ -166,6 +168,17 @@ class CoverArt extends StatelessWidget {
     final seed = (item.id.hashCode & 0x7fffffff) % _duo.length;
     final pair = _duo[seed];
     final title = item.title.trim();
+    if (!showTitle) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: pair,
+          ),
+        ),
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(

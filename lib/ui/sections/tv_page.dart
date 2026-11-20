@@ -134,7 +134,7 @@ class _Card extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              CoverArt(item: item, cacheWidth: 600),
+              CoverArt(item: item, cacheWidth: 600, showTitle: false),
               const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(

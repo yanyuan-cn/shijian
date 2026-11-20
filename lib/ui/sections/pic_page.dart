@@ -41,15 +41,15 @@ class _PicPageState extends State<PicPage> with AutomaticKeepAliveClientMixin {
           );
         }
         return LayoutBuilder(builder: (context, c) {
-          const pad = 16.0;
-          const gap = 12.0;
+          const pad = 20.0;
+          const gap = 16.0;
           final colW = (c.maxWidth - pad * 2 - gap) / 2;
           final left = <int>[];
           final right = <int>[];
           var hl = 0.0, hr = 0.0;
           for (var i = 0; i < items.length; i++) {
             final ar = items[i].aspect.clamp(0.4, 2.6);
-            final h = colW / ar + 34;
+            final h = colW / ar;
             if (hl <= hr) {
               left.add(i);
               hl += h + gap;
@@ -74,7 +74,7 @@ class _PicPageState extends State<PicPage> with AutomaticKeepAliveClientMixin {
               );
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(pad, 14, pad, 24),
+            padding: const EdgeInsets.fromLTRB(pad, 16, pad, 32),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -106,47 +106,62 @@ class _Polaroid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ar = item.aspect.clamp(0.4, 2.6);
-    // 用 hash 派生一个稳定的倾角，重新构建时不会跳
-    final seed = (item.id.hashCode & 0x7fffffff) % 7;
-    final angle = (seed - 3) * 0.006;
-    return Transform.rotate(
-      angle: angle,
-      child: GestureDetector(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(7, 7, 7, 9),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEDE7DB),
-            borderRadius: BorderRadius.circular(3),
-            boxShadow: const [
-              BoxShadow(
-                  color: Color(0x66000000),
-                  blurRadius: 10,
-                  offset: Offset(0, 5))
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        width: width,
+        height: math.max(60, width / ar),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0x12FFFFFF)),
+          boxShadow: const [
+            BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 30,
+                offset: Offset(0, 10))
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: SizedBox(
-                  width: width,
-                  height: math.max(60, width / ar),
-                  child: CoverArt(item: item, cacheWidth: 700),
+              CoverArt(item: item, cacheWidth: 700, showTitle: false),
+              // 原版 .pic .img::after：上白下黑的一层薄纱
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x0AFFFFFF), Color(0x47000000)],
+                  ),
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 10.5,
-                    height: 1.2,
-                    color: Color(0xFF3A332A),
-                    fontFamily: T.serif),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(13, 26, 13, 11),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x00000000), Color(0x99000000)],
+                    ),
+                  ),
+                  child: Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      letterSpacing: 0.48,
+                      color: C.text,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
