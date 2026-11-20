@@ -56,51 +56,64 @@ class _MoviePageState extends State<MoviePage>
             sub: '右上角 + 添加，或从数据源匹配',
           );
         }
-        return LayoutBuilder(builder: (context, c) {
-          const pad = 16.0;
-          const gap = 10.0;
-          final tileW = (c.maxWidth - pad * 2 - gap * 2) / 3;
-          final tileH = tileW * 1.5;
-          final vh = c.maxHeight;
-          return CustomScrollView(
-            controller: _sc,
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(pad, 12, pad, 24),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: gap,
-                    crossAxisSpacing: gap,
-                    childAspectRatio: 2 / 3,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) {
-                      final it = items[i];
-                      final row = i ~/ 3;
-                      final centerY = 12 + row * (tileH + gap) + tileH / 2;
-                      return AnimatedBuilder(
-                        animation: _off,
-                        builder: (context, child) {
-                          final vc = _off.value + vh / 2;
-                          final k =
-                              math.min((centerY - vc).abs() / (vh * 0.62), 1.0);
-                          return Opacity(
-                            opacity: 1 - 0.42 * k,
-                            child: Transform.scale(scale: 1 - 0.1 * k, child: child),
-                          );
-                        },
-                        child: _Poster(item: it),
-                      );
-                    },
-                    childCount: items.length,
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(0, -0.1),
+              radius: 1.0,
+              colors: [Color(0x00000000), Color(0xB8000000)],
+              stops: [0.1, 1],
+            ),
+          ),
+          child: LayoutBuilder(builder: (context, c) {
+            const pad = 16.0;
+            const gapX = 12.0;
+            const gapY = 20.0;
+            final tileW = (c.maxWidth - pad * 2 - gapX * 2) / 3;
+            final tileH = tileW * 1.5;
+            final vh = c.maxHeight;
+            return CustomScrollView(
+              controller: _sc,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(pad, 16, pad, 28),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      mainAxisSpacing: gapY,
+                      crossAxisSpacing: gapX,
+                      childAspectRatio: 2 / 3,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final it = items[i];
+                        final row = i ~/ 3;
+                        final centerY =
+                            16 + row * (tileH + gapY) + tileH / 2;
+                        return AnimatedBuilder(
+                          animation: _off,
+                          builder: (context, child) {
+                            final vc = _off.value + vh / 2;
+                            final k = math.min(
+                                (centerY - vc).abs() / (vh * 0.62), 1.0);
+                            return Opacity(
+                              opacity: 1 - 0.42 * k,
+                              child: Transform.scale(
+                                  scale: 1 - 0.1 * k, child: child),
+                            );
+                          },
+                          child: _Poster(item: it),
+                        );
+                      },
+                      childCount: items.length,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        });
+              ],
+            );
+          }),
+        );
       },
     );
   }
@@ -115,67 +128,86 @@ class _Poster extends StatelessWidget {
     final rating = item.rating;
     return GestureDetector(
       onTap: () => showItemSheet(context, item),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(7),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CoverArt(item: item, cacheWidth: 360),
-            // 底部压一层渐变，保证白字永远读得清
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0xCC000000)],
-                  stops: [0.55, 1],
-                ),
-              ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0x0DFFFFFF)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x99000000),
+              blurRadius: 40,
+              offset: Offset(0, 18),
             ),
-            Positioned(
-              left: 7,
-              right: 7,
-              bottom: 7,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 11.5,
-                        height: 1.25,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white),
-                  ),
-                  if (item.year != null)
-                    Text(item.year!,
-                        style: const TextStyle(
-                            fontSize: 9.5, color: Colors.white60)),
-                ],
-              ),
-            ),
-            if (rating != null)
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(rating,
-                      style: const TextStyle(
-                          fontSize: 9.5,
-                          color: Color(0xFFFFD479),
-                          fontWeight: FontWeight.w600)),
-                ),
-              ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CoverArt(item: item, cacheWidth: 360),
+              // 原版 .poster::after：上白下黑的薄纱，保证底部白字读得清
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x0DFFFFFF), Color(0x99000000)],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 11,
+                right: 11,
+                bottom: 11,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: T.serif,
+                        fontSize: 12.5,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    if (item.year != null) ...[
+                      const SizedBox(height: 3),
+                      Text(item.year!,
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            letterSpacing: 0.76,
+                            color: Color(0x8CFFFFFF),
+                          )),
+                    ],
+                  ],
+                ),
+              ),
+              if (rating != null)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(rating,
+                        style: const TextStyle(
+                            fontSize: 9.5,
+                            color: Color(0xFFFFD479),
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

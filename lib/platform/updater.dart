@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../data/settings.dart';
 import '../ui/kit.dart';
@@ -53,13 +54,24 @@ class Updater {
 
       String? apk;
       var size = 0;
-      for (final a in (data['assets'] as List?) ?? const []) {
-        final name = (a['name'] ?? '').toString();
-        if (name.endsWith('.apk')) {
-          apk = (a['browser_download_url'] ?? '').toString();
-          size = ((a['size'] as num?) ?? 0).toInt();
-          break;
+      final assets = ((data['assets'] as List?) ?? const [])
+          .whereType<Map>()
+          .where((a) => (a['name'] ?? '').toString().endsWith('.apk'))
+          .toList();
+      // 优先 arm64 的分包（体积是 universal 的一半，下载快一倍）
+      assets.sort((a, b) {
+        int w(Map m) {
+          final n = (m['name'] ?? '').toString();
+          if (n.contains('arm64')) return 0;
+          if (n.contains('armeabi')) return 1;
+          return 2;
         }
+
+        return w(a).compareTo(w(b));
+      });
+      if (assets.isNotEmpty) {
+        apk = (assets.first['browser_download_url'] ?? '').toString();
+        size = ((assets.first['size'] as num?) ?? 0).toInt();
       }
       final rel = _Release(
         ver,
@@ -130,8 +142,21 @@ class Updater {
     );
   }
 
+  /// GitHub 的 Release 资源会 302 到 objects.githubusercontent.com，
+  /// 国内经常被 reset（错误长这样：`Connection reset by peer`）。
+  /// 所以直连失败后依次换公共反代重试——只是把整个 URL 拼在镜像前缀后面。
+  static const _mirrors = <String>[
+    '',
+    'https://ghfast.top/',
+    'https://gh-proxy.com/',
+    'https://ghproxy.net/',
+    'https://hub.gitmirror.com/',
+    'https://ghp.ci/',
+  ];
+
   static Future<void> _download(BuildContext context, _Release rel) async {
     final progress = ValueNotifier<double>(0);
+    final label = ValueNotifier<String>('连接中…');
     final dlg = showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -141,52 +166,133 @@ class Updater {
           valueListenable: progress,
           builder: (_, v, __) => Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               LinearProgressIndicator(
                 value: v <= 0 ? null : v,
                 backgroundColor: C.panel2,
               ),
               const SizedBox(height: 10),
-              Text(v <= 0 ? '连接中…' : '${(v * 100).toStringAsFixed(0)}%',
+              Text(v <= 0 ? label.value : '${(v * 100).toStringAsFixed(0)}%',
                   style: T.small),
             ],
           ),
         ),
       ),
     );
+    Object? lastError;
+    File? apk;
     try {
       final dir = await getTemporaryDirectory();
       final file = File(p.join(dir.path, 'shijian-${rel.tag}.apk'));
-      await Dio().download(
-        rel.apkUrl!,
-        file.path,
-        onReceiveProgress: (got, total) {
-          if (total > 0) progress.value = got / total;
-        },
-      );
+      for (var i = 0; i < _mirrors.length; i++) {
+        final url = '${_mirrors[i]}${rel.apkUrl!}';
+        try {
+          if (i > 0) label.value = '换线路重试（第 ${i + 1} 个）…';
+          if (await file.exists()) await file.delete();
+          await _fetchTo(url, file, rel.apkSize, progress);
+          apk = file;
+          break;
+        } catch (e) {
+          lastError = e;
+          progress.value = 0;
+        }
+      }
       if (context.mounted) Navigator.pop(context);
       await dlg;
-
-      if (!await canInstallApk()) {
+      if (apk == null) {
         if (!context.mounted) return;
-        final ok = await confirm(context,
-            title: '需要允许安装应用',
-            message: '系统拦住了安装。请在接下来的设置页里允许「拾间」安装未知应用，然后点重试。',
-            ok: '去设置');
-        if (ok) {
-          await openInstallSettings();
+        final open = await confirm(
+          context,
+          title: '下载失败',
+          message: '直连和几个镜像都没成功（${_short(lastError)}）。'
+              '可以用浏览器打开发布页手动下载安装。',
+          ok: '打开发布页',
+        );
+        if (open) {
+          await launchUrl(Uri.parse(rel.pageUrl),
+              mode: LaunchMode.externalApplication);
         }
         return;
       }
-      final ok = await installApk(file.path);
+
+      if (!await canInstallApk()) {
+        if (!context.mounted) return;
+        await openInstallSettings();
+        if (!context.mounted) return;
+        final go = await confirm(
+          context,
+          title: '在设置里允许后回来',
+          message: '找到「拾间」→ 打开「允许安装未知应用」，然后回到这里点「继续安装」。',
+          ok: '继续安装',
+        );
+        if (!go) return;
+        if (!await canInstallApk()) {
+          if (context.mounted) toast(context, '系统还没放开安装权限');
+          return;
+        }
+      }
+      final ok = await installApk(apk.path);
       if (!ok && context.mounted) toast(context, '拉起安装器失败');
     } catch (e) {
       if (context.mounted) Navigator.pop(context);
       await dlg;
-      if (context.mounted) toast(context, '下载失败：$e');
+      if (context.mounted) toast(context, '下载失败：${_short(e)}');
     } finally {
       progress.dispose();
+      label.dispose();
     }
+  }
+
+  /// 流式下载：15 秒内没下到 4% 就判定这条线路太慢，抛错换下一个。
+  static Future<void> _fetchTo(
+    String url,
+    File file,
+    int expect,
+    ValueNotifier<double> progress,
+  ) async {
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 30),
+      followRedirects: true,
+      maxRedirects: 6,
+      validateStatus: (s) => s != null && s < 400,
+    ));
+    final resp = await dio.get<ResponseBody>(
+      url,
+      options: Options(responseType: ResponseType.stream),
+    );
+    final total =
+        int.tryParse(resp.headers.value(Headers.contentLengthHeader) ?? '') ??
+            expect;
+    final sink = file.openWrite();
+    var got = 0;
+    final sw = Stopwatch()..start();
+    var checked = false;
+    try {
+      await for (final chunk in resp.data!.stream) {
+        sink.add(chunk);
+        got += chunk.length;
+        if (total > 0) progress.value = got / total;
+        if (!checked && sw.elapsed > const Duration(seconds: 15)) {
+          checked = true;
+          if (total > 0 && got / total < 0.04) {
+            throw StateError('线路太慢');
+          }
+        }
+      }
+    } finally {
+      await sink.close();
+    }
+    if (expect > 0 && await file.length() != expect) {
+      throw StateError('包大小不对');
+    }
+  }
+
+  static String _short(Object? e) {
+    if (e == null) return '未知错误';
+    final s = e.toString().replaceAll('\n', ' ');
+    return s.length > 60 ? '${s.substring(0, 60)}…' : s;
   }
 
   static String _clean(String tag) {
