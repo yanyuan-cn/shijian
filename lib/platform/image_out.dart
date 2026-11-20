@@ -14,13 +14,20 @@ import '../ui/kit.dart';
 
 const _ch = MethodChannel('shijian/native');
 
+/// 最近一次原生调用失败的原文，用于把「为什么失败」告诉用户，而不是只吞掉。
+String nativeLastError = '';
+
 Future<bool> _call(String method, Map<String, dynamic> args) async {
   try {
     final r = await _ch.invokeMethod<bool>(method, args);
+    nativeLastError = '';
     return r ?? false;
   } on MissingPluginException {
+    nativeLastError = '原生通道缺失（$method）';
     return false;
-  } on PlatformException {
+  } on PlatformException catch (e) {
+    nativeLastError = '${e.code}: ${e.message}';
+    debugPrint('[native] $method 失败 -> $nativeLastError');
     return false;
   }
 }

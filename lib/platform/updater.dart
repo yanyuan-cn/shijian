@@ -242,7 +242,10 @@ class Updater {
         }
       }
       final ok = await installApk(apk.path);
-      if (!ok && context.mounted) toast(context, '拉起安装器失败');
+      if (!ok && context.mounted) {
+        toast(context,
+            '拉起安装器失败${nativeLastError.isEmpty ? '' : '：$nativeLastError'}');
+      }
     } catch (e) {
       if (context.mounted) Navigator.pop(context);
       await dlg;
