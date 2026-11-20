@@ -421,7 +421,12 @@ class _Spine extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [c.sp0, c.sp1],
+          // 原版书脊在暗环境里是被压暗的：整体降一点亮度，底部更沉
+          colors: [
+            Color.lerp(c.sp0, Colors.black, 0.10)!,
+            Color.lerp(c.sp1, Colors.black, 0.22)!,
+          ],
+          stops: const [0, 1],
         ),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(2),
@@ -657,6 +662,27 @@ class _CoverFace extends StatelessWidget {
                     radius: 0.95,
                     colors: [Color(0x00000000), Color(0x57000000)],
                     stops: [0.55, 1],
+                  ),
+                ),
+              ),
+              // 封面越往深（远离书脊）越暗，避免整面发亮像一块板子
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [Color(0x3D000000), Color(0xB8000000)],
+                  ),
+                ),
+              ),
+              // 上沿有一点高光，下沿更暗
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x14FFFFFF), Color(0x00000000), Color(0x4D000000)],
+                    stops: [0, 0.35, 1],
                   ),
                 ),
               ),
