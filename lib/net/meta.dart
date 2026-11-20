@@ -212,6 +212,9 @@ class MetaService {
       }
     }
     if (e is TimeoutException) return '超时';
+    if (e is TypeError || e is FormatException) {
+      return '返回的不是预期的 JSON（中转地址可能填错）';
+    }
     return _short(e);
   }
 
