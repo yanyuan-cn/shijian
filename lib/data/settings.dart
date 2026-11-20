@@ -32,8 +32,9 @@ class Settings {
   static String get omdbKey => _p.getString('omdbKey') ?? '';
   static set omdbKey(String v) => _p.setString('omdbKey', v.trim());
 
-  /// 通用代理前缀。非空时所有数据源请求都走 `<proxy>/?url=<原始地址>`。
-  /// 支持的写法：`https://xxx.workers.dev` 或含 `{url}` 占位的模板。
+  /// 网络出口，两种写法自动识别：
+  ///  · 代理：`host:port`、`http://host:port`、`socks5://host:port`（带端口即代理）
+  ///  · 中转：`https://xxx.workers.dev`（不带端口即中转，请求改写成 `?url=<原始地址>`）
   static String get proxy => _p.getString('proxy') ?? '';
   static set proxy(String v) => _p.setString('proxy', v.trim());
 

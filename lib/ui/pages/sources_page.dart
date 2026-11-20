@@ -58,7 +58,8 @@ class _SourcesPageState extends State<SourcesPage> {
           _hint('关掉之后，添加时只显示「匹配数据源」按钮，不会自动发请求 —— 国内网络不稳时建议关。'),
           const SizedBox(height: 22),
           _label('网络'),
-          _field('HTTP 代理', _proxy, 'host:port（模拟器填 10.0.2.2:7897，真机填电脑局域网 IP）'),
+          _field('HTTP 代理 / 中转地址', _proxy,
+              '两种都行：代理填 127.0.0.1:7890；中转填 https://xxx.workers.dev'),
           _switchTile('只让匹配请求走代理', _proxyMetaOnly, (v) {
             setState(() => _proxyMetaOnly = v);
             Settings.proxyOnlyMeta = v;
@@ -84,12 +85,12 @@ class _SourcesPageState extends State<SourcesPage> {
           _label('说明'),
           _hint('· 匹配只是省事，所有字段都能手填，随时能在编辑里改。\n'
               '· 匹配到的封面会下载到本地，之后断网也看得到。\n'
-              '· 国内直连 TMDB/Google Books/Open Library 基本不通，配一个代理即可：\n'
-              '   ① 电脑上开着 Clash/v2ray 类工具，记下端口（如 7897）；\n'
-              '   ② 模拟器里代理填 10.0.2.2:端口（10.0.2.2 指向电脑本机）；\n'
-              '   ③ 真机上填电脑的局域网 IP:端口，并在代理工具里打开「允许局域网连接」。\n'
-              '· 也支持 socks5://host:port 前缀。\n'
-              '· TMDB 需要先在下面填 API Key（themoviedb.org 免费申请）。'),
+              '· 这一栏填什么，看你手上有什么：\n'
+              '   【有中转服务】填 https://xxx.workers.dev —— 手机不用挂代理，国内直连即可。\n'
+              '   【手机有 Clash】填 127.0.0.1:7890 —— 让 App 走手机本地代理。\n'
+              '   【电脑有 Clash】填电脑局域网 IP:端口，并在电脑上开「允许局域网连接」。\n'
+              '· 带端口（:7890 / :7897）按代理处理，不带端口按中转处理；支持 socks5://。\n'
+              '· TMDB 需要先在上面填 API Key（themoviedb.org 免费申请）。'),
         ],
       ),
     );

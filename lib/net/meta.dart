@@ -22,7 +22,13 @@ Dio buildDio({bool meta = true}) {
   ));
   final proxy = Settings.proxy.trim();
   if (proxy.isNotEmpty && meta) {
-    // 支持：裸 host:port、http://、https://、socks5://、socks://
+    if (_isRelay(proxy)) {
+      // 中转模式：把原始 URL 交给中转服务（Cloudflare Worker 等），
+      // 形如 https://xxx.workers.dev/?url=<原始地址>，或含 {url} 占位。
+      dio.interceptors.add(_RelayInterceptor(proxy));
+      return dio;
+    }
+    // 代理模式：支持裸 host:port、http://、https://、socks5://、socks://
     var hp = proxy;
     String scheme = 'PROXY';
     final lower = hp.toLowerCase();
@@ -49,6 +55,40 @@ Dio buildDio({bool meta = true}) {
     );
   }
   return dio;
+}
+
+/// 判断填写的是「中转地址」还是「代理地址」。
+/// 代理一定带端口（127.0.0.1:7897），中转是普通域名/URL，不带端口。
+bool _isRelay(String v) {
+  var s = v;
+  final lower = s.toLowerCase();
+  if (lower.startsWith('socks5://') || lower.startsWith('socks://')) return false;
+  if (lower.startsWith('http://')) s = s.substring(7);
+  if (lower.startsWith('https://')) s = s.substring(8);
+  if (s.contains('{url}')) return true; // 显式模板
+  return !s.contains(':'); // 带 :port 的是代理
+}
+
+/// 把每个数据源请求改写成 `<中转>?url=<原始地址>`。
+class _RelayInterceptor extends Interceptor {
+  _RelayInterceptor(this.tpl);
+
+  final String tpl;
+
+  @override
+  void onRequest(RequestOptions o, RequestInterceptorHandler h) {
+    final full = o.uri.toString();
+    final enc = Uri.encodeComponent(full);
+    final base = tpl.trim();
+    if (base.contains('{url}')) {
+      o.path = base.replaceAll('{url}', enc);
+    } else {
+      final sep = base.contains('?') ? '&' : '?';
+      o.path = '$base${sep}url=$enc';
+    }
+    o.baseUrl = '';
+    h.next(o);
+  }
 }
 
 class MetaCandidate {
@@ -150,6 +190,8 @@ class MetaService {
       final r = await p.search(type, q).timeout(const Duration(seconds: 15));
       return (hits: r.length, error: '');
     } catch (e) {
+      // ignore: avoid_print — 只写 logcat，方便排查数据源连通性
+      print('[probe] $label 失败 -> $e');
       return (hits: -1, error: _errText(e));
     }
   }
@@ -160,17 +202,25 @@ class MetaService {
         case DioExceptionType.connectionTimeout:
           return '连接超时（网络/DNS 不通）';
         case DioExceptionType.connectionError:
-          return '连接失败：${e.message}';
+          return '连接失败：${_short(e.error ?? e.message)}';
         case DioExceptionType.receiveTimeout:
           return '响应超时';
         case DioExceptionType.badResponse:
           return 'HTTP ${e.response?.statusCode}';
         default:
-          return '${e.type.name}: ${e.message}';
+          return '网络错误：${_short(e.error ?? e.message)}';
       }
     }
     if (e is TimeoutException) return '超时';
-    return e.toString();
+    return _short(e);
+  }
+
+  /// 把底层异常（SocketException / HandshakeException 等）压成一行可读文字。
+  static String _short(Object? o) {
+    if (o == null) return '无详情';
+    var s = o.toString().replaceAll('\n', ' ').trim();
+    if (s.length > 110) s = '${s.substring(0, 110)}…';
+    return s;
   }
 
   static Future<List<MetaCandidate>> search(String type, String q,
