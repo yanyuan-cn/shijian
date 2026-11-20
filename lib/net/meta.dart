@@ -6,12 +6,12 @@
 ///  · 匹配到的封面必须下载成 blob 再入库，绝不在条目里存远程 URL。
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
-import '../data/app_state.dart';
 import '../data/settings.dart';
 
 Dio buildDio({bool meta = true}) {
@@ -22,14 +22,27 @@ Dio buildDio({bool meta = true}) {
   ));
   final proxy = Settings.proxy.trim();
   if (proxy.isNotEmpty && meta) {
+    // 支持：裸 host:port、http://、https://、socks5://、socks://
     var hp = proxy;
-    if (hp.startsWith('http://')) hp = hp.substring(7);
-    if (hp.startsWith('https://')) hp = hp.substring(8);
-    hp = hp.split('/').first;
+    String scheme = 'PROXY';
+    final lower = hp.toLowerCase();
+    if (lower.startsWith('socks5://')) {
+      scheme = 'SOCKS5';
+      hp = hp.substring(9);
+    } else if (lower.startsWith('socks://')) {
+      scheme = 'SOCKS5';
+      hp = hp.substring(8);
+    } else if (lower.startsWith('http://')) {
+      hp = hp.substring(7);
+    } else if (lower.startsWith('https://')) {
+      hp = hp.substring(8);
+    }
+    hp = hp.split('/').first; // 去掉任何 path
+    final target = scheme == 'SOCKS5' ? 'SOCKS5 $hp' : 'PROXY $hp';
     dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final c = HttpClient();
-        c.findProxy = (_) => 'PROXY $hp';
+        c.findProxy = (_) => target;
         c.connectionTimeout = const Duration(seconds: 12);
         return c;
       },
@@ -119,16 +132,15 @@ class MetaService {
     _Bangumi(),
   ];
 
-  /// 设置页的连通性自检：返回命中条数，-1 表示这个源当前不可用。
-  static Future<int> probe(String label) async {
+  /// 设置页的连通性自检：返回命中条数（-1=不可用）和失败原因（空串=成功）。
+  static Future<({int hits, String error})> probe(String label) async {
     final p = providers.where((e) => e.label == label).firstOrNull;
-    if (p == null) return -1;
-    if (p.id == 'tmdb' && Settings.tmdbKey.trim().isEmpty) return -1;
-    final q = switch (p.id) {
-      'googlebooks' || 'openlibrary' => '三体',
-      'tmdb' => '三体',
-      _ => '三体',
-    };
+    if (p == null) return (hits: -1, error: '未知数据源');
+    if (p.id == 'tmdb' && Settings.tmdbKey.trim().isEmpty) {
+      return (hits: -1, error: '未填 TMDB API Key');
+    }
+    // Open Library 要求 query ≥3 字符，「三体」只有 2 个汉字会 422，用 4 字词。
+    const q = '三体小说';
     final type = switch (p.id) {
       'tmdb' => 'movie',
       'bangumi' => 'tv',
@@ -136,10 +148,29 @@ class MetaService {
     };
     try {
       final r = await p.search(type, q).timeout(const Duration(seconds: 15));
-      return r.length;
-    } catch (_) {
-      return -1;
+      return (hits: r.length, error: '');
+    } catch (e) {
+      return (hits: -1, error: _errText(e));
     }
+  }
+
+  static String _errText(Object e) {
+    if (e is DioException) {
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+          return '连接超时（网络/DNS 不通）';
+        case DioExceptionType.connectionError:
+          return '连接失败：${e.message}';
+        case DioExceptionType.receiveTimeout:
+          return '响应超时';
+        case DioExceptionType.badResponse:
+          return 'HTTP ${e.response?.statusCode}';
+        default:
+          return '${e.type.name}: ${e.message}';
+      }
+    }
+    if (e is TimeoutException) return '超时';
+    return e.toString();
   }
 
   static Future<List<MetaCandidate>> search(String type, String q,

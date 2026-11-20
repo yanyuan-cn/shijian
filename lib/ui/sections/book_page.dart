@@ -290,13 +290,17 @@ class _BookPageState extends State<BookPage>
         ..translate(i * gap, -k * 7, k * out);
       // 书脊全部先画，封面后画：Flutter 按 widget 顺序绘制，
       // 否则后一本的书脊会盖掉前一本的封面（CSS 里由 preserve-3d 的深度排序处理）。
+      // RepaintBoundary 让每本书只栅格化一次，拖动时仅重新合成变换，
+      // 不再每帧重画渐变+阴影，是书架拖拽丝滑的关键。
       spines.add(Transform(
         alignment: Alignment.center,
         transform: Matrix4.copy(base)..translate(0.0, 0.0, bkW / 2),
-        child: SizedBox(
-          width: bkT,
-          height: bkH,
-          child: _Spine(item: books[i], index: i, centered: d.abs() < 0.5),
+        child: RepaintBoundary(
+          child: SizedBox(
+            width: bkT,
+            height: bkH,
+            child: _Spine(item: books[i], index: i, centered: d.abs() < 0.5),
+          ),
         ),
       ));
       covers.add(Transform(
@@ -304,10 +308,12 @@ class _BookPageState extends State<BookPage>
         transform: Matrix4.copy(base)
           ..rotateY(math.pi / 2)
           ..translate(0.0, 0.0, bkT / 2),
-        child: SizedBox(
-          width: bkW,
-          height: bkH,
-          child: _CoverFace(item: books[i], index: i),
+        child: RepaintBoundary(
+          child: SizedBox(
+            width: bkW,
+            height: bkH,
+            child: _CoverFace(item: books[i], index: i),
+          ),
         ),
       ));
     }
@@ -559,52 +565,34 @@ class _Spine extends StatelessWidget {
                 ),
               ),
             ),
-            // 竖排书名 + 作者
+            // 竖排书名 + 作者（原版 writing-mode:vertical-rl，字符保持直立）
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 18),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Flexible(
-                    child: RotatedBox(
-                      quarterTurns: 1,
-                      child: Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: T.serif,
-                          fontSize: 15,
-                          height: 1.05,
-                          letterSpacing: 3.6, // .24em
-                          fontWeight: FontWeight.w600,
-                          color: centered
-                              ? Colors.white
-                              : const Color(0xFFEDF1F7),
-                          shadows: const [
-                            Shadow(
-                                color: Color(0x73000000),
-                                blurRadius: 5,
-                                offset: Offset(0, 1)),
-                          ],
-                        ),
-                      ),
+                  _VText(
+                    item.title,
+                    gap: 3.6, // .24em
+                    maxChars: 14,
+                    style: TextStyle(
+                      fontFamily: T.serif,
+                      fontSize: 15,
+                      height: 1.05,
+                      fontWeight: FontWeight.w600,
+                      color: centered ? Colors.white : const Color(0xFFEDF1F7),
                     ),
                   ),
                   if ((item.creator ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    RotatedBox(
-                      quarterTurns: 1,
-                      child: Text(
-                        item.creator!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 9,
-                          height: 1.05,
-                          letterSpacing: 1.26, // .14em
-                          color: Colors.white.withValues(alpha: 0.5),
-                        ),
+                    const SizedBox(height: 14),
+                    _VText(
+                      item.creator!,
+                      gap: 1.26, // .14em
+                      maxChars: 6,
+                      style: TextStyle(
+                        fontSize: 9,
+                        height: 1.05,
+                        color: Colors.white.withValues(alpha: 0.5),
                       ),
                     ),
                   ],
@@ -614,6 +602,36 @@ class _Spine extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 直立竖排文字：把字符串拆成单个字符竖向堆叠（等效 writing-mode:vertical-rl），
+/// 每个字符保持直立、不旋转，用于书脊书名/作者。
+class _VText extends StatelessWidget {
+  const _VText(this.text,
+      {required this.gap, required this.maxChars, required this.style});
+
+  final String text;
+  final double gap;
+  final int maxChars;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    var chars = text.runes.map(String.fromCharCode).toList();
+    if (chars.length > maxChars) {
+      chars = chars.sublist(0, maxChars);
+      chars.add('…');
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < chars.length; i++) ...[
+          if (i > 0) SizedBox(height: gap),
+          Text(chars[i], maxLines: 1, style: style),
+        ],
+      ],
     );
   }
 }

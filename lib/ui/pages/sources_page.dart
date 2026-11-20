@@ -58,7 +58,7 @@ class _SourcesPageState extends State<SourcesPage> {
           _hint('关掉之后，添加时只显示「匹配数据源」按钮，不会自动发请求 —— 国内网络不稳时建议关。'),
           const SizedBox(height: 22),
           _label('网络'),
-          _field('HTTP 代理', _proxy, 'host:port，例如 127.0.0.1:7890'),
+          _field('HTTP 代理', _proxy, 'host:port（模拟器填 10.0.2.2:7897，真机填电脑局域网 IP）'),
           _switchTile('只让匹配请求走代理', _proxyMetaOnly, (v) {
             setState(() => _proxyMetaOnly = v);
             Settings.proxyOnlyMeta = v;
@@ -78,13 +78,18 @@ class _SourcesPageState extends State<SourcesPage> {
           ),
           if (_testing.isNotEmpty) ...[
             const SizedBox(height: 14),
-            Text(_testing, style: T.small.copyWith(color: C.accent2)),
+            Text(_testing, style: T.small.copyWith(color: C.accent2, height: 1.6)),
           ],
           const SizedBox(height: 26),
           _label('说明'),
           _hint('· 匹配只是省事，所有字段都能手填，随时能在编辑里改。\n'
               '· 匹配到的封面会下载到本地，之后断网也看得到。\n'
-              '· 数据源在国内常被墙，配好代理或自己搭个转发就行。'),
+              '· 国内直连 TMDB/Google Books/Open Library 基本不通，配一个代理即可：\n'
+              '   ① 电脑上开着 Clash/v2ray 类工具，记下端口（如 7897）；\n'
+              '   ② 模拟器里代理填 10.0.2.2:端口（10.0.2.2 指向电脑本机）；\n'
+              '   ③ 真机上填电脑的局域网 IP:端口，并在代理工具里打开「允许局域网连接」。\n'
+              '· 也支持 socks5://host:port 前缀。\n'
+              '· TMDB 需要先在下面填 API Key（themoviedb.org 免费申请）。'),
         ],
       ),
     );
@@ -97,15 +102,11 @@ class _SourcesPageState extends State<SourcesPage> {
     final lines = <String>[];
     for (final src in const ['Google Books', 'Open Library', 'TMDB', 'Bangumi']) {
       final t = DateTime.now();
-      String r;
-      try {
-        final list = await MetaService.probe(src);
-        r = list >= 0 ? '通（$list 条）' : '不可用';
-      } catch (e) {
-        r = '失败';
-      }
+      final r = await MetaService.probe(src);
       final ms = DateTime.now().difference(t).inMilliseconds;
-      lines.add('$src：$r · $ms ms');
+      final status = r.hits >= 0 ? '通（${r.hits} 条）' : '不可用';
+      final err = r.error.isEmpty ? '' : ' · ${r.error}';
+      lines.add('$src：$status$err · $ms ms');
     }
     if (mounted) setState(() => _testing = lines.join('\n'));
   }
