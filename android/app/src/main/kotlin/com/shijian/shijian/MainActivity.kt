@@ -232,7 +232,12 @@ class MainActivity : FlutterActivity() {
             }
             val intent = Intent(this, InstallReceiver::class.java)
                 .setAction(InstallReceiver.ACTION_INSTALL_RESULT)
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            // PackageInstaller 要往 Intent 里填结果，Android 12+ 强制要求 mutable。
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
             val pending = PendingIntent.getBroadcast(this, sessionId, intent, flags)
             session.commit(pending.intentSender)
         }
