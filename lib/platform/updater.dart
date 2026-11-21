@@ -155,12 +155,14 @@ class Updater {
   /// 国内经常被 reset（错误长这样：`Connection reset by peer`）。
   /// 所以直连失败后依次换公共反代重试——只是把整个 URL 拼在镜像前缀后面。
   static const _mirrors = <String>[
-    '',
+    // 国内直连 GitHub 的 Release 资源经常只有几十 KB/s 或被重置，
+    // 所以默认先走加速镜像，直连放到最后一档兜底。
     'https://ghfast.top/',
     'https://gh-proxy.com/',
     'https://ghproxy.net/',
     'https://hub.gitmirror.com/',
     'https://ghp.ci/',
+    '',
   ];
 
   static Future<void> _download(BuildContext context, _Release rel) async {

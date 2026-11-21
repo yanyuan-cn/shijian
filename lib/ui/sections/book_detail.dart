@@ -9,6 +9,7 @@ import '../form/item_form.dart';
 import '../kit.dart';
 import '../reader/reader_page.dart';
 import '../theme.dart';
+import 'shelf_view.dart' show BookCoverArt;
 
 class BookDetailPage extends StatefulWidget {
   const BookDetailPage({super.key, required this.item});
@@ -102,29 +103,14 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       Center(
                         child: Hero(
                           tag: 'book-cover-${it.id}',
-                          createRectTween: (a, b) => RectTween(begin: a, end: b),
-                          child: Container(
+                          createRectTween: (a, b) =>
+                              RectTween(begin: a, end: b),
+                          // 纯装饰封面（不含文字）：飞行体和这里画法完全一致，
+                          // Hero 只是在缩放同一张图，文字不会重新排版。
+                          child: SizedBox(
                             width: 152,
                             height: 214,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [c1, c2],
-                              ),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.55),
-                                  blurRadius: 26,
-                                  offset: const Offset(0, 14),
-                                ),
-                              ],
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: it.cover != null
-                                ? BlobImage(it.cover, fit: BoxFit.cover)
-                                : _spineTitle(it),
+                            child: BookCoverArt(item: it),
                           ),
                         ),
                       ),

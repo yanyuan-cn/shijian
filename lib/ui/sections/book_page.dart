@@ -61,6 +61,7 @@ class BookPage extends StatelessWidget {
         return ShelfView(
           books: books,
           onOpen: (i) => _open(context, i),
+          onTap: (i) => _open(context, i),
           focusIndex: focusIndex,
           focusNonce: focusNonce,
         );

@@ -21,6 +21,7 @@ class SourcesPage extends StatefulWidget {
 class _SourcesPageState extends State<SourcesPage> {
   final _tmdb = TextEditingController(text: Settings.tmdbKey ?? '');
   final _omdb = TextEditingController(text: Settings.omdbKey ?? '');
+  final _gb = TextEditingController(text: Settings.gbKey);
   final _proxy = TextEditingController(text: Settings.proxy ?? '');
   bool _auto = Settings.autoMatch;
   bool _proxyMetaOnly = Settings.proxyOnlyMeta;
@@ -30,6 +31,7 @@ class _SourcesPageState extends State<SourcesPage> {
   void dispose() {
     _tmdb.dispose();
     _omdb.dispose();
+    _gb.dispose();
     _proxy.dispose();
     super.dispose();
   }
@@ -50,6 +52,8 @@ class _SourcesPageState extends State<SourcesPage> {
           _label('匹配'),
           _field('TMDB API Key', _tmdb, '电影/剧集海报与简介（themoviedb.org 免费申请）'),
           _field('OMDb Key（可选）', _omdb, '补充评分与简介'),
+          _field('Google Books Key（可选，强烈建议）', _gb,
+              '匿名配额是 0，填自己的 key 才能查书（cloud.google.com 免费 1000 次/天）'),
           _switchTile('添加时自动匹配', _auto, (v) {
             setState(() => _auto = v);
             Settings.autoMatch = v;
@@ -70,6 +74,7 @@ class _SourcesPageState extends State<SourcesPage> {
               _btn('保存', () {
                 Settings.tmdbKey = _tmdb.text.trim();
                 Settings.omdbKey = _omdb.text.trim();
+    Settings.gbKey = _gb.text.trim();
                 Settings.proxy = _proxy.text.trim();
                 toast(context, '已保存');
               }),

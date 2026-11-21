@@ -33,6 +33,7 @@ class ShelfView extends StatefulWidget {
     super.key,
     required this.books,
     required this.onOpen,
+    required this.onTap,
     this.animateIn = true,
     this.focusIndex,
     this.focusNonce = 0,
@@ -40,6 +41,9 @@ class ShelfView extends StatefulWidget {
 
   final List<Item> books;
   final void Function(int index) onOpen;
+
+  /// 点了某一本（不论是不是中间那本）。
+  final void Function(int index) onTap;
   final bool animateIn;
 
   /// 外部要求定位到第几本（侧边栏点条目）。配合 [focusNonce] 触发一次动画。
@@ -148,20 +152,50 @@ class _ShelfViewState extends State<ShelfView>
 
   void _onUp(PointerEvent e) {
     if (e.pointer != _pointerId) return;
-    final moved = (e.position.dx - _downX).abs();
     _pointerId = -1;
-    if (!_dragging && moved < 10) {
-      final i = _cur.value.round();
-      // 先把位置钉死再开详情页：Hero 的起点/终点都按当前布局算，
-      // 若这时弹簧还在跑，飞机会先落到旧位置再跳一下。
-      _spring.stop();
-      _cur.value = i.toDouble();
-      _remember();
-      if (i >= 0 && i < widget.books.length) widget.onOpen(i);
+    if (_dragging) {
+      _dragging = false;
+      _settle(velocityPx: _velocityPx);
       return;
     }
-    _dragging = false;
-    _settle(velocityPx: _velocityPx);
+    // 轻点：用几何反解「手指底下是哪一本」，比逐本挂 GestureDetector 可靠
+    // （书的盒子和封面条互相重叠，命中测试容易落到相邻那本上）。
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || widget.books.isEmpty) return;
+    final local = box.globalToLocal(e.position);
+    final g = _geo(_lastW);
+    final half = box.size.width / 2;
+    final tapped =
+        (_cur.value + (local.dx - half) / (g.gap * _cosT))
+            .round()
+            .clamp(0, widget.books.length - 1);
+    _onTapBook(tapped);
+  }
+
+  /// 点了第 i 本：中间那本 → 展开；其它 → 滑过去把它推起来。
+  void _onTapBook(int i) {
+    final g = _geo(_lastW);
+    final center = _cur.value.round();
+    final atCenter = (i == center) && (_cur.value - i).abs() < 0.45;
+    _spring.stop();
+    if (atCenter) {
+      _cur.value = i.toDouble();
+      _remember();
+      widget.onTap(i);
+    } else {
+      _settleTo(i.toDouble());
+      // 让 Hero 起点落在「滑过去之后」的位置：先把目标位写进去，
+      // 避免用户手快、弹簧没停就点第二次时又打开错的那本。
+      if (g.gap > 0) _rememberAt(i);
+    }
+  }
+
+  /// 直接记某一本（不等弹簧停下）。
+  void _rememberAt(int i) {
+    final books = widget.books;
+    if (i < 0 || i >= books.length) return;
+    if (!Settings.ready) return;
+    Settings.setString('shelfFocusId', books[i].id);
   }
 
   double _lastW = 411;
@@ -170,6 +204,7 @@ class _ShelfViewState extends State<ShelfView>
   void _remember() {
     final books = widget.books;
     if (books.isEmpty) return;
+    if (!Settings.ready) return;
     final i = _cur.value.round().clamp(0, books.length - 1);
     Settings.setString('shelfFocusId', books[i].id);
   }
@@ -244,7 +279,7 @@ class _ShelfViewState extends State<ShelfView>
           if (!_didCenter && books.isNotEmpty) {
             // 首次布局：优先回到上次退出时停留的那一本，找不到就居中。
             _didCenter = true;
-            final savedId = Settings.getString('shelfFocusId');
+            final savedId = Settings.ready ? Settings.getString('shelfFocusId') : null;
             final idx = savedId == null
                 ? -1
                 : books.indexWhere((b) => b.id == savedId);
@@ -373,7 +408,7 @@ class _ShelfViewState extends State<ShelfView>
   Widget _rig(List<Item> books, _Geo g, double pos) {
     // 每本书的盒子里除了书脊，右侧还挂着一条封面窄条（视觉上属于这本书）；
     // 盒子居中时书脊会偏左，所以整体右移半个「封面超出书脊」的量，让聚焦那本的**书脊**落在正中。
-    final shift = (g.bkW * 0.488 / 0.899 - g.t) / 2 + 25;
+    const shift = 0.0; // 书脊在盒子里本来就是居中的，不需要额外补偿
     final rig = Matrix4.identity()
       ..setEntry(3, 2, -1 / 1500) // CSS perspective:1500px → 必须是负值
       ..translate(shift, 0.0, 0.0)
@@ -520,37 +555,63 @@ class _FlightCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: item.cover != null
           ? BlobImage(item.cover!, fit: BoxFit.cover)
-          : Padding(
-              padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(height: 1, color: Colors.white24),
-                  const Spacer(),
-                  Text(
-                    item.title,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: T.serif,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      height: 1.4,
-                      color: Color(0xFFF2F5FA),
+          : const SizedBox.expand(),
+    );
+  }
+}
+
+/// 详情页封面用的纯装饰卡：和飞行体同一套画法（**不含文字**），
+/// 这样 Hero 缩放时不会有任何文字重新排版 → 彻底避免「书名跳一下」。
+class BookCoverArt extends StatelessWidget {
+  const BookCoverArt({super.key, required this.item});
+
+  final Item item;
+
+  @override
+  Widget build(BuildContext context) {
+    final c1 = _hexColor(item.metaStr('c1'), const Color(0xFF2A3B58));
+    final c2 = _hexColor(item.metaStr('c2'), const Color(0xFF131B29));
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [c1, c2],
+        ),
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.55),
+            blurRadius: 34,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: item.cover != null
+          ? BlobImage(item.cover!, fit: BoxFit.cover)
+          : Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 1.2,
+                  child: ColoredBox(color: Colors.white.withValues(alpha: 0.28)),
+                ),
+                Center(
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.16),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.creator ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.white.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
     );
   }

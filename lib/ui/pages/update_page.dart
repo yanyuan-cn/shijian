@@ -9,10 +9,20 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.3.0';
+  static const String current = '1.4.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.4.0',
+      [
+        '书架：聚焦的那本真正落在屏幕正中（去掉了旧的补偿位移）',
+        '书架：点旁边那本只会滑过去把它推起来，再点一次才展开',
+        '打开/放回时封面不再有文字，飞行过程只是一次缩放，标题不再跳',
+        '更新下载默认走加速镜像，不再卡在几 KB/s',
+        '数据源新增 Google Books Key（可选）：填了才能查书，Open Library 作兜底',
+      ],
+    ),
     (
       '1.3.0',
       [

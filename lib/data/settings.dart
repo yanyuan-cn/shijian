@@ -14,6 +14,9 @@ class Settings {
   static late SharedPreferences _p;
   static bool _ready = false;
 
+  /// Settings 是否已 init（golden 测试 / 纯 Dart 环境下为 false）。
+  static bool get ready => _ready;
+
   static Future<void> init() async {
     if (_ready) return;
     _p = await SharedPreferences.getInstance();
@@ -28,6 +31,10 @@ class Settings {
   // ---------- 数据源 ----------
   static String get tmdbKey => _p.getString('tmdbKey') ?? '';
   static set tmdbKey(String v) => _p.setString('tmdbKey', v.trim());
+
+  /// Google Books API Key（可选）：匿名配额是 0，填了自己的 key 才有额度。
+  static String get gbKey => _p.getString('gbKey') ?? '';
+  static set gbKey(String v) => _p.setString('gbKey', v.trim());
 
   static String get omdbKey => _p.getString('omdbKey') ?? '';
   static set omdbKey(String v) => _p.setString('omdbKey', v.trim());

@@ -289,7 +289,11 @@ class _GoogleBooks implements MetaProvider {
     final query = isIsbn ? 'isbn:${q.replaceAll('-', '')}' : 'intitle:$q';
     final r = await MetaService._dio.get(
       'https://www.googleapis.com/books/v1/volumes',
-      queryParameters: {'q': query, 'maxResults': 10},
+      queryParameters: {
+        'q': query,
+        'maxResults': 10,
+        if (Settings.gbKey.isNotEmpty) 'key': Settings.gbKey,
+      },
     );
     final items = (r.data?['items'] as List?) ?? const [];
     return items.map((e) {
