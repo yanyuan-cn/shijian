@@ -9,10 +9,21 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.4.0';
+  static const String current = '1.5.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.5.0',
+      [
+        '书架：放回动画不再「先飘到别处再跳回来」——起止位置改成按几何算准，收回就是收回',
+        '书架：书与书之间加了接触阴影，书顶加了受光切面，整排不再是并排的卡片',
+        '书架：中心那本抽出更明显，两侧的书会被压暗一点，层次更像真书架',
+        '书籍匹配新增 NeoDB 数据源（放在第一位）：中文书 ISBN 命中率高，出版社是中文原名，封面无防盗链',
+        '数据源自检新增 NeoDB 与 ISBN 两条，能直接看出哪一档在生效',
+        '移除 Hero 自动测量（透视变换下它量不准，正是「跳一下」的根因）',
+      ],
+    ),
     (
       '1.4.0',
       [

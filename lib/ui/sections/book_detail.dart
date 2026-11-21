@@ -12,9 +12,12 @@ import '../theme.dart';
 import 'shelf_view.dart' show BookCoverArt;
 
 class BookDetailPage extends StatefulWidget {
-  const BookDetailPage({super.key, required this.item});
+  const BookDetailPage({super.key, required this.item, this.flightFrom});
 
   final Item item;
+
+  /// 从书架上点进来时那本书书脊的屏幕矩形。给了它就做「从书脊展开」的飞行。
+  final Rect? flightFrom;
 
   @override
   State<BookDetailPage> createState() => _BookDetailPageState();
@@ -23,6 +26,25 @@ class BookDetailPage extends StatefulWidget {
 class _BookDetailPageState extends State<BookDetailPage> {
   bool _changed = false;
   late Item _item = widget.item;
+
+  /// 封面卡最终位置的全局矩形（布局完成后量一次）。
+  final GlobalKey _coverKey = GlobalKey();
+  Rect? _coverRect;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureCover());
+  }
+
+  void _measureCover() {
+    if (!mounted) return;
+    final box = _coverKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final r = box.localToGlobal(Offset.zero) & box.size;
+    if (_coverRect == r) return;
+    setState(() => _coverRect = r);
+  }
 
   Item get _live => App.I.byId(_item.id) ?? _item;
 
@@ -71,7 +93,51 @@ class _BookDetailPageState extends State<BookDetailPage> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) Navigator.pop(context, _changed);
       },
-      child: Scaffold(
+      child: Stack(
+        children: [
+          _body(it, c1, c2, prog, tags),
+          if (widget.flightFrom != null) _flight(it),
+        ],
+      ),
+    );
+  }
+
+  /// 「从书脊展开 / 收回书脊」的飞行卡：起止矩形都是我们自己算的，
+  /// 不依赖 Hero 在透视变换下的测量（那正是之前「落到别处再跳一下」的原因）。
+  Widget _flight(Item it) {
+    final anim = ModalRoute.of(context)?.animation;
+    final from = widget.flightFrom;
+    if (anim == null || from == null) return const SizedBox.shrink();
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: anim,
+          builder: (_, __) {
+            final v = anim.value;
+            // 动画结束时卡片和真封面完全重合，直接不画，省一层重绘。
+            if (v > 0.995) return const SizedBox.shrink();
+            final t = const Cubic(0.22, 0.61, 0.36, 1).transform(v);
+            final target = _coverRect ?? from;
+            final r = Rect.lerp(from, target, t)!;
+            return Stack(
+              children: [
+                Positioned(
+                  left: r.left,
+                  top: r.top,
+                  width: r.width,
+                  height: r.height,
+                  child: BookCoverArt(item: it),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _body(Item it, Color c1, Color c2, int prog, List<String> tags) {
+    return Scaffold(
         backgroundColor: C.bg,
         body: SafeArea(
           child: Column(
@@ -101,17 +167,11 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Center(
-                        child: Hero(
-                          tag: 'book-cover-${it.id}',
-                          createRectTween: (a, b) =>
-                              RectTween(begin: a, end: b),
-                          // 纯装饰封面（不含文字）：飞行体和这里画法完全一致，
-                          // Hero 只是在缩放同一张图，文字不会重新排版。
-                          child: SizedBox(
-                            width: 152,
-                            height: 214,
-                            child: BookCoverArt(item: it),
-                          ),
+                        child: SizedBox(
+                          key: _coverKey,
+                          width: 152,
+                          height: 214,
+                          child: BookCoverArt(item: it),
                         ),
                       ),
                       const SizedBox(height: 28),
@@ -177,7 +237,6 @@ class _BookDetailPageState extends State<BookDetailPage> {
             ],
           ),
         ),
-      ),
     );
   }
 

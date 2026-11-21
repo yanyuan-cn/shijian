@@ -72,7 +72,7 @@ void main() {
           body: ShelfView(
             books: books,
             onOpen: (_) {},
-            onTap: (_) {},
+            onTap: (_, __) {},
             animateIn: false,
           ),
         ),

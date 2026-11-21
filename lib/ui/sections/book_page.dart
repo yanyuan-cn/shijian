@@ -21,14 +21,21 @@ class BookPage extends StatelessWidget {
   final int focusIndex;
   final int focusNonce;
 
-  Future<void> _open(BuildContext context, int i) async {
+  Future<void> _open(BuildContext context, int i, Rect fromRect) async {
     final books = App.I.of(ST.book);
     if (i < 0 || i >= books.length) return;
     await Navigator.of(context).push<bool>(
       PageRouteBuilder(
+        // 半透明路由：详情页淡入时底下还看得见书架，
+        // 放回时才是「飞回书脊」而不是「飞向黑屏」。
+        opaque: false,
+        barrierColor: Colors.transparent,
         transitionDuration: const Duration(milliseconds: 320),
-        reverseTransitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (_, a, __) => BookDetailPage(item: books[i]),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (_, a, __) => BookDetailPage(
+          item: books[i],
+          flightFrom: fromRect,
+        ),
         transitionsBuilder: (_, a, __, child) {
           // cubic-bezier(.22, .61, .36, 1)
           final curved = CurvedAnimation(
@@ -36,16 +43,7 @@ class BookPage extends StatelessWidget {
             curve: const Cubic(0.22, 0.61, 0.36, 1),
             reverseCurve: const Cubic(0.22, 0.61, 0.36, 1).flipped,
           );
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.02),
-                end: Offset.zero,
-              ).animate(curved),
-              child: child,
-            ),
-          );
+          return FadeTransition(opacity: curved, child: child);
         },
       ),
     );
@@ -60,8 +58,8 @@ class BookPage extends StatelessWidget {
         if (books.isEmpty) return _empty(context);
         return ShelfView(
           books: books,
-          onOpen: (i) => _open(context, i),
-          onTap: (i) => _open(context, i),
+          onOpen: (i) => _open(context, i, Rect.zero),
+          onTap: (i, rect) => _open(context, i, rect),
           focusIndex: focusIndex,
           focusNonce: focusNonce,
         );

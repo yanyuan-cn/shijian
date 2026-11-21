@@ -108,7 +108,14 @@ class _SourcesPageState extends State<SourcesPage> {
     Settings.proxy = _proxy.text.trim();
     setState(() => _testing = '测试中…');
     final lines = <String>[];
-    for (final src in const ['Google Books', 'Open Library', 'TMDB', 'Bangumi']) {
+    for (final src in const [
+      'NeoDB',
+      'ISBN',
+      'Open Library',
+      'Google Books',
+      'TMDB',
+      'Bangumi',
+    ]) {
       final t = DateTime.now();
       final r = await MetaService.probe(src);
       final ms = DateTime.now().difference(t).inMilliseconds;

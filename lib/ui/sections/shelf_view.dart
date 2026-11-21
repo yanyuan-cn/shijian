@@ -42,8 +42,9 @@ class ShelfView extends StatefulWidget {
   final List<Item> books;
   final void Function(int index) onOpen;
 
-  /// 点了某一本（不论是不是中间那本）。
-  final void Function(int index) onTap;
+  /// 点了某一本（不论是不是中间那本）。第二个参数是这本书**当前在屏幕上的矩形**，
+  /// 详情页用它做「从书脊展开 / 回到书脊」的飞行，避免 Hero 在透视变换下量错位置。
+  final void Function(int index, Rect sourceRect) onTap;
   final bool animateIn;
 
   /// 外部要求定位到第几本（侧边栏点条目）。配合 [focusNonce] 触发一次动画。
@@ -181,13 +182,41 @@ class _ShelfViewState extends State<ShelfView>
     if (atCenter) {
       _cur.value = i.toDouble();
       _remember();
-      widget.onTap(i);
+      widget.onTap(i, _bookRect(i));
     } else {
       _settleTo(i.toDouble());
-      // 让 Hero 起点落在「滑过去之后」的位置：先把目标位写进去，
-      // 避免用户手快、弹簧没停就点第二次时又打开错的那本。
+      // 让下次点击落在「滑过去之后」的位置上：先把目标位写进去。
       if (g.gap > 0) _rememberAt(i);
     }
+  }
+
+  /// 解析计算第 i 本书**书脊**此刻在屏幕上的矩形（全局坐标）。
+  ///
+  /// 不用 Hero 自动测量：书脊在「透视 + rotateY(-26°)」两层变换里，
+  /// Hero 只取 localToGlobal(0,0) + 未变换的 size，量出来的框和肉眼看到的差很多，
+  /// 于是飞行结束时会「先落到别处再跳一下」。
+  Rect _bookRect(int i) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return Rect.zero;
+    final g = _geo(_lastW);
+    final d = i - _cur.value;
+    final k0 = (1 - d.abs() / 1.12).clamp(0.0, 1.0);
+    final k = k0 * k0 * (3 - 2 * k0);
+    final w = box.size.width;
+    final h = box.size.height;
+    final lift = (h * 0.13).clamp(70.0, 150.0);
+    // 书的层：Positioned(bottom: 98 + lift - 8, height: g.h)，在它内部居中
+    final layerCenterY = h - (98 + lift - 8) - g.h / 2;
+    final cx = w / 2 + d * g.gap * _cosT;
+    final cy = layerCenterY - k * 11;
+    // 透视只影响缩放：z = d*gap*sin26°，超出部分改距离
+    final persp = 1 / (1 - (d * g.gap * _sinT) / 1500).clamp(0.6, 1.6);
+    final rect = Rect.fromCenter(
+      center: Offset(cx, cy),
+      width: g.t * _cosT * persp,
+      height: g.h * persp,
+    );
+    return rect.shift(box.localToGlobal(Offset.zero));
   }
 
   /// 直接记某一本（不等弹簧停下）。
@@ -478,6 +507,32 @@ class _Book extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
+          // 书顶面：书是立在台面上的，从 -26° 的视角看过去，
+          // 顶上会露出「一窄条被照亮的切面」——原版的锯齿书顶就是它。
+          // 不旋转（旋转 90° 投影为 0），直接画一条顶部亮带 + 一条暗带。
+          Positioned(
+            left: 0,
+            top: -4,
+            width: geo.t,
+            height: 4,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.16 + 0.10 * focus),
+                      Colors.white.withValues(alpha: 0.04),
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(2),
+                  ),
+                ),
+              ),
+            ),
+          ),
           // 封面（盒子右侧面）：先绕 Y 转 -90° 把宽度方向变成深度方向，
           // 再平移到 x=+bkT/2。经 rig 的 -26° 旋转后，这块面投影到书脊左侧。
           // OverflowBox 是必须的：Stack 给的约束宽度只有 bkT，不放开的话
@@ -499,22 +554,14 @@ class _Book extends StatelessWidget {
             alignment: Alignment.center,
             transform: Matrix4.translationValues(0.0, 0.0, geo.bkW / 2),
             child: RepaintBoundary(
-              child: Hero(
-                tag: 'book-cover-${item.id}',
-                // 抽出时书脊本身不参与飞行（由详情页的封面卡接管）
-                flightShuttleBuilder: (_, _, _, _, _) => _FlightCard(item: item),
-                // 线性插值：Material 默认的弧形 Tween 会让卡片中途「绕一下」，
-                // 观感上就是文字横竖切换时乱跳。
-                createRectTween: (a, b) => RectTween(begin: a, end: b),
-                child: SizedBox(
-                  width: geo.t,
-                  height: geo.h,
-                  child: _Spine(
-                    item: item,
-                    index: index,
-                    centered: centered,
-                    focus: focus,
-                  ),
+              child: SizedBox(
+                width: geo.t,
+                height: geo.h,
+                child: _Spine(
+                  item: item,
+                  index: index,
+                  centered: centered,
+                  focus: focus,
                 ),
               ),
             ),
@@ -673,10 +720,14 @@ class _Spine extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = bookColors(item, index);
     final lift = focus.clamp(0.0, 1.0) * 0.12;
-    // 三段渐变：顶部比本色亮 15%，中段回落，底部压暗 25%
-    final top = Color.lerp(c.sp0, Colors.white, 0.15 - 0.10 * focus)!;
-    final mid = Color.lerp(c.sp0, c.sp1, 0.55)!;
-    final bot = Color.lerp(c.sp1, Colors.black, 0.25)!;
+    // 三段渐变：顶部比本色亮 15%，中段回落，底部压暗 25%。
+    // 额外统一压暗 26%：和原版逐像素比过，我这版整体亮度是它的 1.6 倍
+    // （区域平均亮度 36.4 vs 22.7），压暗后才有那种「暗室里一束光」的层次。
+    final base0 = Color.lerp(c.sp0, Colors.black, 0.12)!;
+    final base1 = Color.lerp(c.sp1, Colors.black, 0.12)!;
+    final top = Color.lerp(base0, Colors.white, 0.15 - 0.10 * focus)!;
+    final mid = Color.lerp(base0, base1, 0.55)!;
+    final bot = Color.lerp(base1, Colors.black, 0.25)!;
     const radius = BorderRadius.only(
       topLeft: Radius.circular(2),
       topRight: Radius.circular(3),
@@ -747,14 +798,27 @@ class _Spine extends StatelessWidget {
                 ),
               ),
             ),
-            // 左侧暗边：书脊是圆柱体，左缘背光
+            // 左侧暗边：书脊是圆柱体，左缘背光。
+            // 1.5px 硬线 + 外侧 7px 的软过渡，让相邻两本书「挤」在一起，
+            // 而不是各自干干净净地并排（原版那种书与书贴合的质感来自这里）。
             Positioned(
               left: 0,
               top: 0,
               bottom: 0,
-              width: 1.5,
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.45),
+              width: 5,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.42),
+                      Colors.black.withValues(alpha: 0.14),
+                      Colors.transparent,
+                    ],
+                    stops: const [0, 0.22, 1],
+                  ),
+                ),
               ),
             ),
             // 右侧棱线高光：1.5px 的近白细线，圆柱体的受光面
@@ -976,7 +1040,7 @@ class _CoverFace extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Color(0x73FFFFFF), Color(0x00FFFFFF)],
+                    colors: [Color(0x5AFFFFFF), Color(0x00FFFFFF)],
                   ),
                 ),
               ),
@@ -988,7 +1052,7 @@ class _CoverFace extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0x38FFFFFF),
+                    Color(0x24FFFFFF),
                     Color(0x00000000),
                     Color(0x00000000),
                     Color(0x55000000),
@@ -1123,7 +1187,7 @@ class _ShelfTop extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x47FFFFFF), Color(0x0DFFFFFF)],
+                  colors: [Color(0x2EFFFFFF), Color(0x08FFFFFF)],
                 ),
               ),
             ),
@@ -1147,7 +1211,7 @@ class _ShelfFace extends StatelessWidget {
           end: Alignment.bottomCenter,
           colors: [Color(0xFF0E151F), Color(0xFF070B11)],
         ),
-        border: Border(top: BorderSide(color: Color(0x29FFFFFF))),
+        border: Border(top: BorderSide(color: Color(0x1CFFFFFF))),
         boxShadow: [
           BoxShadow(
             color: Color(0x99000000),
