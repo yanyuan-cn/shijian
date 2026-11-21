@@ -19,6 +19,7 @@ import '../../data/settings.dart';
 import '../kit.dart';
 import '../theme.dart';
 import 'match_sheet.dart';
+import '../../net/meta.dart';
 
 class ItemForm extends StatefulWidget {
   const ItemForm({super.key, required this.type, this.item});
@@ -44,6 +45,7 @@ class ItemForm extends StatefulWidget {
 class _ItemFormState extends State<ItemForm> {
   late final SectionSpec _spec = SectionSpec.of(widget.type);
   final _title = TextEditingController();
+  final _isbn = TextEditingController();
   final Map<String, TextEditingController> _ctl = {};
   final Map<String, dynamic> _meta = {};
   String? _cover;
@@ -61,6 +63,7 @@ class _ItemFormState extends State<ItemForm> {
     super.initState();
     final it = widget.item;
     _title.text = it?.title ?? '';
+    _isbn.text = it?.meta['isbn']?.toString() ?? '';
     final fields = _spec.fields;
     for (final f in fields) {
       final text = f.isMeta
@@ -204,6 +207,14 @@ class _ItemFormState extends State<ItemForm> {
         coverHash = await App.I.putCover(_pendingBytes!);
       }
       final meta = Map<String, dynamic>.from(_meta);
+      if (widget.type == ST.book) {
+        final isbn = _isbn.text.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase();
+        if (isbn.isEmpty) {
+          meta.remove('isbn');
+        } else {
+          meta['isbn'] = isbn;
+        }
+      }
       for (final f in _spec.fields) {
         if (f.isMeta) {
           final v = _ctl[f.key]?.text.trim() ?? '';
@@ -274,6 +285,22 @@ class _ItemFormState extends State<ItemForm> {
     final res = await MatchSheet.show(context,
         type: widget.type, query: title);
     if (res == null) return;
+    _applyMatch(res);
+  }
+
+  /// 扫/输入 ISBN → 走同一套匹配面板，命中后直接回填封面。
+  Future<void> _matchByIsbn() async {
+    final raw = _isbn.text.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase();
+    if (raw.length != 10 && raw.length != 13) {
+      toast(context, 'ISBN 应该是 10 位或 13 位数字');
+      return;
+    }
+    final res = await MatchSheet.show(context, type: ST.book, query: raw);
+    if (res == null) return;
+    _applyMatch(res);
+  }
+
+  void _applyMatch(MatchResult res) {
     setState(() {
       if (res.title.isNotEmpty) _title.text = res.title;
       if (res.creator != null) _ctl['creator']?.text = res.creator!;
@@ -331,6 +358,10 @@ class _ItemFormState extends State<ItemForm> {
                     style: const TextStyle(fontSize: 15),
                     decoration: InputDecoration(hintText: _spec.titleHint),
                   ),
+                  if (widget.type == ST.book) ...[
+                    const SizedBox(height: 14),
+                    _isbnRow(),
+                  ],
                   const SizedBox(height: 14),
                   ..._buildFields(),
                 ],
@@ -343,8 +374,46 @@ class _ItemFormState extends State<ItemForm> {
     );
   }
 
-  Widget _handle() => Center(
-        child: Container(
+  /// ISBN 行：扫出来的码贴进来就能直接匹配封面/简介。
+  Widget _isbnRow() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _label('ISBN（可选，用来精确匹配）'),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _isbn,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(fontSize: 15),
+                  decoration: const InputDecoration(
+                    hintText: '9787536692930',
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 42,
+                child: OutlinedButton(
+                  onPressed: _busy ? null : _matchByIsbn,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: C.accent2,
+                    side: BorderSide(color: C.accent2.withValues(alpha: 0.45)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                  ),
+                  child: const Text('按码匹配', style: TextStyle(fontSize: 13)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+
+  Widget _handle() => Center(        child: Container(
           margin: const EdgeInsets.only(top: 8, bottom: 4),
           width: 38,
           height: 4,

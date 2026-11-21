@@ -166,6 +166,8 @@ class MetaService {
   }
 
   static final List<MetaProvider> providers = [
+    // ISBN 精确查询放最前面：命中率最高，还能直接拿到封面。
+    _IsbnLookup(),
     _GoogleBooks(),
     _OpenLibrary(),
     _Tmdb(),
@@ -308,6 +310,65 @@ class _GoogleBooks implements MetaProvider {
         sourceUrl: (v['infoLink'] ?? '').toString(),
       );
     }).where((c) => c.title.isNotEmpty).toList();
+  }
+}
+
+/// ISBN 精确查询：Open Library 的 /api/books 接口，命中率比 search.json 高得多，
+/// 而且中文书也有（实测 9787536692930 → 三体 / 刘慈欣）。只在输入是 ISBN 时生效。
+class _IsbnLookup implements MetaProvider {
+  @override
+  String get id => 'isbn';
+  @override
+  String get label => 'ISBN';
+  @override
+  bool supports(String type) => type == 'book';
+
+  static bool looksLikeIsbn(String q) {
+    final v = q.replaceAll(RegExp(r'[^0-9Xx]'), '');
+    return v.length == 10 || v.length == 13;
+  }
+
+  @override
+  Future<List<MetaCandidate>> search(String type, String q) async {
+    final isbn = q.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase();
+    if (!looksLikeIsbn(isbn)) return const [];
+    final r = await MetaService._dio.get(
+      'https://openlibrary.org/api/books',
+      queryParameters: {
+        'bibkeys': 'ISBN:$isbn',
+        'format': 'json',
+        'jscmd': 'data',
+      },
+    );
+    final map = r.data as Map?;
+    final book = map?['ISBN:$isbn'] as Map?;
+    if (book == null) return const [];
+    final cover = (book['cover'] as Map?) ?? const {};
+    final authors = (book['authors'] as List?) ?? const [];
+    return [
+      MetaCandidate(
+        provider: id,
+        id: isbn,
+        title: (book['title'] ?? '').toString(),
+        creator: authors
+            .map((a) => (a as Map)['name']?.toString() ?? '')
+            .where((e) => e.isNotEmpty)
+            .join(' / '),
+        year: _yearOf(book['publish_date']?.toString()),
+        coverUrl: (cover['medium'] ?? cover['large'] ?? cover['small'])
+                ?.toString()
+                ?.replaceFirst('http://', 'https://') ??
+            // 很多版本没有 cover 字段，但按 ISBN 直取封面通常有；
+            // default=false 让「确实没有封面」时返回 404，避免存进一张 1px 的空图。
+            'https://covers.openlibrary.org/b/isbn/$isbn-L.jpg?default=false',
+        sourceUrl: book['url']?.toString(),
+        note: ((book['subjects'] as List?) ?? const [])
+            .take(8)
+            .map((s) => (s as Map)['name']?.toString() ?? '')
+            .where((e) => e.isNotEmpty)
+            .join('、'),
+      ),
+    ];
   }
 }
 

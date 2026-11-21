@@ -9,10 +9,22 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.2.0';
+  static const String current = '1.3.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.3.0',
+      [
+        '书架：进软件时回到上次停留的那一本，不再每次都从中间开始',
+        '书架：书的模型加厚加大（56×272），不再细长，比例更接近真书',
+        '书架：点开/放回同一本书，位置纹丝不动，不再先跳到第一本',
+        '书架：抽出用封面形飞行卡 + 直线插值，书名不再横竖乱跳',
+        '书籍表单新增 ISBN 输入，「按码匹配」直接查封面/作者/年份/简介',
+        '书本数据源改走 Open Library 的 ISBN 接口，中文书命中率明显提高',
+        '首次安装自动填好中转地址，国内打开就能用匹配',
+      ],
+    ),
     (
       '1.2.0',
       [

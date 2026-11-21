@@ -102,6 +102,7 @@ class _BookDetailPageState extends State<BookDetailPage> {
                       Center(
                         child: Hero(
                           tag: 'book-cover-${it.id}',
+                          createRectTween: (a, b) => RectTween(begin: a, end: b),
                           child: Container(
                             width: 152,
                             height: 214,

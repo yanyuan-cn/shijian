@@ -32,6 +32,7 @@ class App extends ChangeNotifier {
   Future<void> init({Directory? baseDir}) async {
     try {
       await Settings.init();
+    Settings.seedDefaultProxy();
       supportDir = baseDir ?? await getApplicationSupportDirectory();
       blobs = await BlobStore.open(supportDir);
       final db = await Db.open(supportDir.path);

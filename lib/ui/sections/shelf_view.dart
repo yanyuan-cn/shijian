@@ -24,6 +24,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/model.dart';
+import '../../data/settings.dart';
 import '../kit.dart';
 import '../theme.dart';
 
@@ -61,7 +62,11 @@ class _ShelfViewState extends State<ShelfView>
   /// 松手吸附用物理弹簧：滑过去 + 轻微过冲 + 回弹，不是「啪」地停住。
   late final AnimationController _spring =
       AnimationController.unbounded(vsync: this)
-        ..addListener(() => _cur.value = _spring.value);
+        ..addListener(() => _cur.value = _spring.value)
+        ..addStatusListener((s) {
+          // 弹簧收敛后记一下位置：下次进软件回到这一本。
+          if (s == AnimationStatus.completed) _remember();
+        });
 
   bool _didCenter = false;
   double _dragStart = 0;
@@ -147,7 +152,11 @@ class _ShelfViewState extends State<ShelfView>
     _pointerId = -1;
     if (!_dragging && moved < 10) {
       final i = _cur.value.round();
-      _settleTo(i.toDouble());
+      // 先把位置钉死再开详情页：Hero 的起点/终点都按当前布局算，
+      // 若这时弹簧还在跑，飞机会先落到旧位置再跳一下。
+      _spring.stop();
+      _cur.value = i.toDouble();
+      _remember();
       if (i >= 0 && i < widget.books.length) widget.onOpen(i);
       return;
     }
@@ -156,6 +165,14 @@ class _ShelfViewState extends State<ShelfView>
   }
 
   double _lastW = 411;
+
+  /// 记住「上次停在那一本」，下次进软件直接回到那里。
+  void _remember() {
+    final books = widget.books;
+    if (books.isEmpty) return;
+    final i = _cur.value.round().clamp(0, books.length - 1);
+    Settings.setString('shelfFocusId', books[i].id);
+  }
 
   /// 用弹簧把浮点位置收敛到 [target]。
   void _settleTo(double target, {double velocityPx = 0}) {
@@ -195,13 +212,13 @@ class _ShelfViewState extends State<ShelfView>
     if (g.gap == 0) return;
   }
 
-  // ---- 旧版 stageMetrics() ----
+  // ---- 旧版 stageMetrics()（书厚/书高按用户反馈调厚调大，比例更协调） ----
   _Geo _geo(double w) {
     if (w < 560) {
-      return const _Geo(gap: 62, out: 76, bkW: 198, t: 44, h: 288);
+      return const _Geo(gap: 74, out: 86, bkW: 212, t: 56, h: 272);
     }
     if (w < 980) {
-      return const _Geo(gap: 78, out: 86, bkW: 198, t: 44, h: 288);
+      return const _Geo(gap: 88, out: 96, bkW: 212, t: 56, h: 288);
     }
     return const _Geo(gap: 98, out: 104, bkW: 262, t: 64, h: 392);
   }
@@ -225,10 +242,15 @@ class _ShelfViewState extends State<ShelfView>
           final g = _geo(w);
           final lift = (h * 0.13).clamp(70.0, 150.0);
           if (!_didCenter && books.isNotEmpty) {
-            // 首次布局就居中：对应 CSS 里 .book{left:50%} + translateX(i*gap)，
-            // 否则第一本会顶在屏幕正中、整排向右溢出屏幕。
+            // 首次布局：优先回到上次退出时停留的那一本，找不到就居中。
             _didCenter = true;
-            _cur.value = (books.length - 1) / 2;
+            final savedId = Settings.getString('shelfFocusId');
+            final idx = savedId == null
+                ? -1
+                : books.indexWhere((b) => b.id == savedId);
+            _cur.value = idx >= 0
+                ? idx.toDouble()
+                : (books.length - 1) / 2;
           }
           _lastW = w;
           return Listener(
@@ -446,6 +468,9 @@ class _Book extends StatelessWidget {
                 tag: 'book-cover-${item.id}',
                 // 抽出时书脊本身不参与飞行（由详情页的封面卡接管）
                 flightShuttleBuilder: (_, _, _, _, _) => _FlightCard(item: item),
+                // 线性插值：Material 默认的弧形 Tween 会让卡片中途「绕一下」，
+                // 观感上就是文字横竖切换时乱跳。
+                createRectTween: (a, b) => RectTween(begin: a, end: b),
                 child: SizedBox(
                   width: geo.t,
                   height: geo.h,

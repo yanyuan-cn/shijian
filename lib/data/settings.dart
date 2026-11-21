@@ -38,6 +38,16 @@ class Settings {
   static String get proxy => _p.getString('proxy') ?? '';
   static set proxy(String v) => _p.setString('proxy', v.trim());
 
+  /// 首次启动时预置中转地址（用户的 Cloudflare Worker，国内可直连）。
+  /// 只写一次：之后用户在设置里清空/改掉都不会被覆盖。
+  static void seedDefaultProxy() {
+    if (_p.containsKey('proxySeeded')) return;
+    if ((_p.getString('proxy') ?? '').isEmpty) {
+      _p.setString('proxy', 'https://meta.shijian.bond');
+    }
+    _p.setBool('proxySeeded', true);
+  }
+
   static bool get proxyOnlyMeta =>
       _p.getBool('proxyOnlyMeta') ?? false; // 只给数据源用，不代理图片下载
   static set proxyOnlyMeta(bool v) => _p.setBool('proxyOnlyMeta', v);
