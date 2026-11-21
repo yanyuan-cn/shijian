@@ -31,6 +31,8 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   int _tab = 0;
+  int _bookFocus = 0;
+  int _bookFocusNonce = 0;
   String _media = ST.movie;
   final _scaffold = GlobalKey<ScaffoldState>();
 
@@ -67,15 +69,24 @@ class _ShellState extends State<Shell> {
         _ => 'me',
       };
 
+  /// 抽屉里点条目：
+  /// - 书 → 回到书架，并把那本书滑到中间（不是直接开详情）
+  /// - 其它 → 直接开详情面板
   void _openItem(Item it) {
+    if (it.type == ST.book) {
+      final i = App.I.of(ST.book).indexWhere((e) => e.id == it.id);
+      setState(() {
+        _tab = 0;
+        if (i >= 0) {
+          _bookFocus = i;
+          _bookFocusNonce++;
+        }
+      });
+      return;
+    }
     Future.delayed(const Duration(milliseconds: 130), () {
       if (!mounted) return;
-      if (it.type == ST.book) {
-        Navigator.of(context)
-            .push(MaterialPageRoute(builder: (_) => BookDetailPage(item: it)));
-      } else {
-        showItemSheet(context, it);
-      }
+      showItemSheet(context, it);
     });
   }
 
@@ -162,7 +173,11 @@ class _ShellState extends State<Shell> {
                     index: _tab,
                     children: [
                       TickerMode(
-                          enabled: _tab == 0, child: const BookPage()),
+                          enabled: _tab == 0,
+                    child: BookPage(
+                      focusIndex: _bookFocus,
+                      focusNonce: _bookFocusNonce,
+                    )),
                       TickerMode(
                         enabled: _tab == 1,
                         child: _media == ST.movie

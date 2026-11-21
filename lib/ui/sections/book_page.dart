@@ -12,16 +12,41 @@ export 'shelf_view.dart' show bookColors;
 
 /// 书架板块：薄壳，真正的 3D 场景在 [ShelfView]。
 class BookPage extends StatelessWidget {
-  const BookPage({super.key});
+  const BookPage({
+    super.key,
+    this.focusIndex = 0,
+    this.focusNonce = 0,
+  });
+
+  final int focusIndex;
+  final int focusNonce;
 
   Future<void> _open(BuildContext context, int i) async {
     final books = App.I.of(ST.book);
     if (i < 0 || i >= books.length) return;
     await Navigator.of(context).push<bool>(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, a, __) =>
-            FadeTransition(opacity: a, child: BookDetailPage(item: books[i])),
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (_, a, __) => BookDetailPage(item: books[i]),
+        transitionsBuilder: (_, a, __, child) {
+          // cubic-bezier(.22, .61, .36, 1)
+          final curved = CurvedAnimation(
+            parent: a,
+            curve: const Cubic(0.22, 0.61, 0.36, 1),
+            reverseCurve: const Cubic(0.22, 0.61, 0.36, 1).flipped,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.02),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
       ),
     );
   }
@@ -33,7 +58,12 @@ class BookPage extends StatelessWidget {
       builder: (context, _) {
         final books = App.I.of(ST.book);
         if (books.isEmpty) return _empty(context);
-        return ShelfView(books: books, onOpen: (i) => _open(context, i));
+        return ShelfView(
+          books: books,
+          onOpen: (i) => _open(context, i),
+          focusIndex: focusIndex,
+          focusNonce: focusNonce,
+        );
       },
     );
   }

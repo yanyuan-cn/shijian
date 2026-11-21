@@ -100,28 +100,31 @@ class _BookDetailPageState extends State<BookDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Center(
-                        child: Container(
-                          width: 148,
-                          height: 208,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [c1, c2],
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.55),
-                                blurRadius: 26,
-                                offset: const Offset(0, 14),
+                        child: Hero(
+                          tag: 'book-cover-${it.id}',
+                          child: Container(
+                            width: 152,
+                            height: 214,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [c1, c2],
                               ),
-                            ],
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  blurRadius: 26,
+                                  offset: const Offset(0, 14),
+                                ),
+                              ],
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: it.cover != null
+                                ? BlobImage(it.cover, fit: BoxFit.cover)
+                                : _spineTitle(it),
                           ),
-                          clipBehavior: Clip.antiAlias,
-                          child: it.cover != null
-                              ? BlobImage(it.cover, fit: BoxFit.cover)
-                              : _spineTitle(it),
                         ),
                       ),
                       const SizedBox(height: 28),
@@ -191,30 +194,41 @@ class _BookDetailPageState extends State<BookDetailPage> {
     );
   }
 
+  /// 没有真实封面时的「排版封面」：横排书名压在上半部，作者在底部。
   Widget _spineTitle(Item it) => Padding(
-        padding: const EdgeInsets.fromLTRB(10, 16, 10, 16),
+        padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(height: 1.5, color: Colors.white24),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Center(
-                child: RotatedBox(
-                  quarterTurns: 1,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(it.title,
-                          style: const TextStyle(
-                              fontFamily: T.serif,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFF2F5FA))),
-                      const SizedBox(height: 8),
-                      Text(it.creator ?? '', style: T.small),
-                    ],
-                  ),
-                ),
+            Container(height: 1.5, color: Colors.white.withValues(alpha: 0.22)),
+            const SizedBox(height: 14),
+            Text(
+              it.title,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: T.serif,
+                fontSize: 19,
+                height: 1.38,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFF4F7FC),
+              ),
+            ),
+            const Spacer(),
+            Container(
+              height: 1,
+              width: 26,
+              color: Colors.white.withValues(alpha: 0.25),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              [it.creator, it.year].where((e) => e != null && e.isNotEmpty).join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9.5,
+                letterSpacing: 0.6,
+                color: Colors.white.withValues(alpha: 0.55),
               ),
             ),
           ],

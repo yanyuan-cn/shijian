@@ -9,10 +9,22 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.1.0';
+  static const String current = '1.2.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.2.0',
+      [
+        '书架：整排共用一套透视（-26° 倾斜），聚焦那本精确落在正中',
+        '书架：手指走多远整排就走多远，1:1 跟手，不再有阻尼延迟',
+        '书架：松手用弹簧吸附，会滑过去、轻微过冲再回弹',
+        '书架：书脊三段渐变 + 右侧棱线高光 + 左侧暗边，不再是一块纯色',
+        '点击书脊 → 从书架位置抽出并展开成详情页（共享元素转场）',
+        '侧边栏点某一本 → 书架自动滑到那本并高亮',
+        '详情页封面改成横排排版封面，配简介与进度',
+      ],
+    ),
     (
       '1.1.0',
       [

@@ -19,6 +19,8 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:flutter/physics.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/model.dart';
@@ -31,11 +33,17 @@ class ShelfView extends StatefulWidget {
     required this.books,
     required this.onOpen,
     this.animateIn = true,
+    this.focusIndex,
+    this.focusNonce = 0,
   });
 
   final List<Item> books;
   final void Function(int index) onOpen;
   final bool animateIn;
+
+  /// 外部要求定位到第几本（侧边栏点条目）。配合 [focusNonce] 触发一次动画。
+  final int? focusIndex;
+  final int focusNonce;
 
   @override
   State<ShelfView> createState() => _ShelfViewState();
@@ -47,25 +55,30 @@ class _ShelfViewState extends State<ShelfView>
   static final double _sinT = math.sin(26 * math.pi / 180);
   static final double _cosT = math.cos(26 * math.pi / 180);
 
-  late final AnimationController _snap = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 520),
-  );
-  double _pos = 0;
+  /// 当前位置（浮点索引）。只有「书层」订阅它，静态背景不进重建范围。
+  final ValueNotifier<double> _cur = ValueNotifier<double>(0);
+
+  /// 松手吸附用物理弹簧：滑过去 + 轻微过冲 + 回弹，不是「啪」地停住。
+  late final AnimationController _spring =
+      AnimationController.unbounded(vsync: this)
+        ..addListener(() => _cur.value = _spring.value);
+
   bool _didCenter = false;
-  double _from = 0;
-  double _to = 0;
   double _dragStart = 0;
+  double _downX = 0;
+  double _downY = 0;
+  double _lastX = 0;
+  int _pointerId = -1;
+  bool _dragging = false;
   bool _entered = false;
+
+  /// 上一次给弹簧的速度（索引单位/秒），用于 fling 判定。
+  double _velocityPx = 0;
 
   @override
   void initState() {
     super.initState();
     _entered = !widget.animateIn;
-    _snap.addListener(() {
-      final t = Curves.easeOutCubic.transform(_snap.value);
-      setState(() => _pos = _from + (_to - _from) * t);
-    });
     if (widget.animateIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _entered = true);
@@ -76,16 +89,110 @@ class _ShelfViewState extends State<ShelfView>
   @override
   void didUpdateWidget(ShelfView old) {
     super.didUpdateWidget(old);
-    if (old.books.length != widget.books.length && !_snap.isAnimating) {
-      final n = widget.books.length;
-      if (n > 0) _pos = _pos.clamp(0, (n - 1).toDouble());
+    final n = widget.books.length;
+    if (n == 0) return;
+    if (old.books.length != n && !_spring.isAnimating) {
+      _cur.value = _cur.value.clamp(0, (n - 1).toDouble());
+    }
+    // 外部（侧边栏）要求定位到某一本
+    if (old.focusNonce != widget.focusNonce && widget.focusIndex != null) {
+      _settleTo(widget.focusIndex!.toDouble());
     }
   }
 
   @override
   void dispose() {
-    _snap.dispose();
+    _spring.dispose();
+    _cur.dispose();
     super.dispose();
+  }
+
+  // ---- 拖拽：Listener 直连指针流，1:1 跟手 ----
+  void _onDown(PointerDownEvent e) {
+    if (widget.books.isEmpty) return;
+    _spring.stop();
+    _pointerId = e.pointer;
+    _dragStart = _cur.value;
+    _downX = _lastX = e.position.dx;
+    _downY = e.position.dy;
+    _dragging = false;
+    _velocityPx = 0;
+  }
+
+  void _onMove(PointerMoveEvent e) {
+    if (e.pointer != _pointerId) return;
+    final dx = e.position.dx - _downX;
+    if (!_dragging) {
+      // 先判方向：明显的纵向滚动让给外层列表，横向才归书架
+      if (dx.abs() < 6) return;
+      if ((e.position.dy - _downY).abs() > dx.abs()) {
+        _pointerId = -1;
+        return;
+      }
+      _dragging = true;
+    }
+    final g = _geo(_lastW);
+    // 手指走 1px，整排走 1px 的等效距离（不加任何阻尼）
+    _cur.value = (_dragStart - dx / (g.gap * _cosT))
+        .clamp(-0.4, widget.books.length - 0.6);
+    _velocityPx = (e.position.dx - _lastX) /
+        math.max(1, e.timeStamp.inMicroseconds / 1000000) *
+        1000;
+    _lastX = e.position.dx;
+  }
+
+  void _onUp(PointerEvent e) {
+    if (e.pointer != _pointerId) return;
+    final moved = (e.position.dx - _downX).abs();
+    _pointerId = -1;
+    if (!_dragging && moved < 10) {
+      final i = _cur.value.round();
+      _settleTo(i.toDouble());
+      if (i >= 0 && i < widget.books.length) widget.onOpen(i);
+      return;
+    }
+    _dragging = false;
+    _settle(velocityPx: _velocityPx);
+  }
+
+  double _lastW = 411;
+
+  /// 用弹簧把浮点位置收敛到 [target]。
+  void _settleTo(double target, {double velocityPx = 0}) {
+    final g = _geo(_lastW);
+    final v = velocityPx / (g.gap * _cosT); // px/s → 索引单位/s
+    _spring.animateWith(
+      SpringSimulation(
+        const SpringDescription(mass: 1, stiffness: 180, damping: 22),
+        _cur.value,
+        target,
+        v,
+      ),
+    );
+  }
+
+  /// 松手：轻扫按速度决定方向（越过 1/3 格就翻），否则吸附到最近整数。
+  void _settle({double velocityPx = 0}) {
+    final pos = _cur.value;
+    final n = widget.books.length;
+    var target = pos.roundToDouble();
+    final g = _geo(_lastW);
+    if (velocityPx.abs() > 260) {
+      final dir = velocityPx > 0 ? -1.0 : 1.0; // 手指右滑 → 索引减小
+      target = (dir > 0 ? pos.floorToDouble() : pos.ceilToDouble());
+    } else {
+      final frac = pos - pos.floorToDouble();
+      if (frac > 0.66) target = pos.ceilToDouble();
+      if (frac < 0.34) target = pos.floorToDouble();
+    }
+    target = target.clamp(0, (n - 1).toDouble());
+    if ((target - pos).abs() < 0.001) {
+      _settleTo(target, velocityPx: velocityPx);
+      return;
+    }
+    _settleTo(target, velocityPx: velocityPx);
+    // 弹簧的过冲不能把书甩出屏幕
+    if (g.gap == 0) return;
   }
 
   // ---- 旧版 stageMetrics() ----
@@ -97,23 +204,6 @@ class _ShelfViewState extends State<ShelfView>
       return const _Geo(gap: 78, out: 86, bkW: 198, t: 44, h: 288);
     }
     return const _Geo(gap: 98, out: 104, bkW: 262, t: 64, h: 392);
-  }
-
-  void _animateTo(double target) {
-    final n = widget.books.length;
-    if (n == 0) return;
-    _to = target.clamp(0, (n - 1).toDouble());
-    _from = _pos;
-    _snap
-      ..reset()
-      ..forward();
-  }
-
-  void _snapToNearest({double velocity = 0}) {
-    final target = velocity.abs() > 260
-        ? (velocity > 0 ? _pos.floorToDouble() : _pos.ceilToDouble())
-        : _pos.roundToDouble();
-    _animateTo(target);
   }
 
   @override
@@ -138,29 +228,17 @@ class _ShelfViewState extends State<ShelfView>
             // 首次布局就居中：对应 CSS 里 .book{left:50%} + translateX(i*gap)，
             // 否则第一本会顶在屏幕正中、整排向右溢出屏幕。
             _didCenter = true;
-            _pos = (books.length - 1) / 2;
+            _cur.value = (books.length - 1) / 2;
           }
-          return GestureDetector(
+          _lastW = w;
+          return Listener(
             behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: (_) {
-              _snap.stop();
-              _dragStart = _pos;
-            },
-            onHorizontalDragUpdate: (d) {
-              if (books.isEmpty) return;
-              setState(() {
-                _pos = (_dragStart - d.primaryDelta! / (g.gap * _cosT))
-                    .clamp(-0.4, books.length - 0.6);
-              });
-            },
-            onHorizontalDragEnd: (d) =>
-                _snapToNearest(velocity: d.velocity.pixelsPerSecond.dx),
-            onTapUp: (d) {
-              final i = _pos.round();
-              if (i >= 0 && i < books.length) {
-                _snapToNearest();
-                widget.onOpen(i);
-              }
+            onPointerDown: _onDown,
+            onPointerMove: _onMove,
+            onPointerUp: _onUp,
+            onPointerCancel: (_) {
+              _pointerId = -1;
+              _dragging = false;
             },
             child: Stack(
               clipBehavior: Clip.none,
@@ -187,7 +265,11 @@ class _ShelfViewState extends State<ShelfView>
                     child: AnimatedOpacity(
                       opacity: _entered ? 1 : 0,
                       duration: const Duration(milliseconds: 700),
-                      child: _rig(books, g),
+                      // 只有这一层订阅位置变化：背景/地面/台面/提示全都不重建
+                      child: AnimatedBuilder(
+                        animation: _cur,
+                        builder: (context, _) => _rig(books, g, _cur.value),
+                      ),
                     ),
                   ),
                 ),
@@ -262,33 +344,40 @@ class _ShelfViewState extends State<ShelfView>
   }
 
   /// 整排书：共用一套 3D 坐标系（透视 + 整体倾斜 + 整体平移）。
-  Widget _rig(List<Item> books, _Geo g) {
-    final off = (g.bkW / 2) * _sinT;
-    final pull = g.out * _sinT;
-    final slide = _pos * g.gap * _cosT;
+  ///
+  /// 定位规则（关键）：书的局部 x = (i - pos) * gap，rig 只做「透视 + 倾斜」不做平移。
+  /// 这样旋转后的屏幕偏移恰好是 (i - pos) * gap * cos26°，pos 那一本永远精确落在正中，
+  /// 不再依赖 off/pull 之类的经验补偿（那些补偿只在 CSS 的 left:50% 布局下成立）。
+  Widget _rig(List<Item> books, _Geo g, double pos) {
+    // 每本书的盒子里除了书脊，右侧还挂着一条封面窄条（视觉上属于这本书）；
+    // 盒子居中时书脊会偏左，所以整体右移半个「封面超出书脊」的量，让聚焦那本的**书脊**落在正中。
+    final shift = (g.bkW * 0.488 / 0.899 - g.t) / 2 + 25;
     final rig = Matrix4.identity()
-      ..setEntry(3, 2, -1 / 1500) // perspective: 1500px
-      ..translate(off + pull - slide, 0.0, 0.0)
+      ..setEntry(3, 2, -1 / 1500) // CSS perspective:1500px → 必须是负值
+      ..translate(shift, 0.0, 0.0)
       ..rotateY(_tilt);
 
     final widgets = <Widget>[];
     for (var i = 0; i < books.length; i++) {
-      final d = i - _pos;
+      final d = i - pos;
       if (d.abs() > 3.4) continue;
       final k0 = (1 - d.abs() / 1.12).clamp(0.0, 1.0);
       final k = k0 * k0 * (3 - 2 * k0); // smoothstep
       final centered = d.abs() < 0.5;
-      // 书按 i*gap 绝对排布；整体位移只由 rig 负责。
+      // 子元素这里只做纯平移 —— 再写 rotateY/透视会得到每本书独立的透视原点。
       // 绘制顺序 = i 递增：右手的书在 -26° 旋转下 z 更大（更靠近镜头），后画即遮挡左侧。
       widgets.add(Transform(
         alignment: Alignment.center,
         transform: Matrix4.identity()
-          ..translate(i * g.gap, -k * 7, k * g.out),
-        child: _Book(
-          item: books[i],
-          index: i,
-          geo: g,
-          centered: centered,
+          ..translate(d * g.gap, -k * 11, k * g.out * 1.25),
+        child: RepaintBoundary(
+          child: _Book(
+            item: books[i],
+            index: i,
+            geo: g,
+            centered: centered,
+            focus: k,
+          ),
         ),
       ));
     }
@@ -312,12 +401,16 @@ class _Book extends StatelessWidget {
     required this.index,
     required this.geo,
     required this.centered,
+    this.focus = 0,
   });
 
   final Item item;
   final int index;
   final _Geo geo;
   final bool centered;
+
+  /// 0 = 两侧的书，1 = 正中间那本（被抽出）。
+  final double focus;
 
   @override
   Widget build(BuildContext context) {
@@ -342,17 +435,27 @@ class _Book extends StatelessWidget {
             top: 0,
             width: geo.bkW * 0.488 / 0.899,
             height: geo.h,
-            child: _CoverFace(item: item, index: index),
+            child: _CoverFace(item: item, index: index, focus: focus),
           ),
           // 书脊（正面）：z=+bkW/2
           Transform(
             alignment: Alignment.center,
             transform: Matrix4.translationValues(0.0, 0.0, geo.bkW / 2),
             child: RepaintBoundary(
-              child: SizedBox(
-                width: geo.t,
-                height: geo.h,
-                child: _Spine(item: item, index: index, centered: centered),
+              child: Hero(
+                tag: 'book-cover-${item.id}',
+                // 抽出时书脊本身不参与飞行（由详情页的封面卡接管）
+                flightShuttleBuilder: (_, _, _, _, _) => _FlightCard(item: item),
+                child: SizedBox(
+                  width: geo.t,
+                  height: geo.h,
+                  child: _Spine(
+                    item: item,
+                    index: index,
+                    centered: centered,
+                    focus: focus,
+                  ),
+                ),
               ),
             ),
           ),
@@ -360,6 +463,79 @@ class _Book extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 抽出时的过渡飞行体：书脊 → 封面卡的中间形态。
+/// 用「封面卡」而不是书脊本身，避免 Hero 把一条竖条拉宽时把竖排文字扯变形。
+class _FlightCard extends StatelessWidget {
+  const _FlightCard({required this.item});
+
+  final Item item;
+
+  @override
+  Widget build(BuildContext context) {
+    final c1 = _hexColor(item.metaStr('c1'), const Color(0xFF2A3B58));
+    final c2 = _hexColor(item.metaStr('c2'), const Color(0xFF131B29));
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [c1, c2],
+        ),
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 30,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: item.cover != null
+          ? BlobImage(item.cover!, fit: BoxFit.cover)
+          : Padding(
+              padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(height: 1, color: Colors.white24),
+                  const Spacer(),
+                  Text(
+                    item.title,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: T.serif,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                      color: Color(0xFFF2F5FA),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.creator ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.white.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+Color _hexColor(String? hex, Color fallback) {
+  if (hex == null || hex.isEmpty) return fallback;
+  final n = int.tryParse(hex.replaceFirst('#', ''), radix: 16);
+  if (n == null) return fallback;
+  return Color(0xFF000000 | n);
 }
 
 /// 书脊 / 封面配色：种子数据里 c1/c2 是书脊渐变，封面用同色系。
@@ -397,15 +573,24 @@ class _Spine extends StatelessWidget {
     required this.item,
     required this.index,
     this.centered = false,
+    this.focus = 0,
   });
 
   final Item item;
   final int index;
   final bool centered;
 
+  /// 0 = 两侧，1 = 正中间。用来把中心那本提亮约 12%。
+  final double focus;
+
   @override
   Widget build(BuildContext context) {
     final c = bookColors(item, index);
+    final lift = focus.clamp(0.0, 1.0) * 0.12;
+    // 三段渐变：顶部比本色亮 15%，中段回落，底部压暗 25%
+    final top = Color.lerp(c.sp0, Colors.white, 0.15 - 0.10 * focus)!;
+    final mid = Color.lerp(c.sp0, c.sp1, 0.55)!;
+    final bot = Color.lerp(c.sp1, Colors.black, 0.25)!;
     const radius = BorderRadius.only(
       topLeft: Radius.circular(2),
       topRight: Radius.circular(3),
@@ -418,9 +603,11 @@ class _Spine extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Color.lerp(c.sp0, Colors.black, 0.06)!,
-            Color.lerp(c.sp1, Colors.black, 0.18)!,
+            Color.lerp(top, Colors.white, lift)!,
+            Color.lerp(mid, Colors.white, lift)!,
+            Color.lerp(bot, Colors.white, lift)!,
           ],
+          stops: const [0, 0.52, 1],
         ),
         borderRadius: radius,
         boxShadow: [
@@ -472,6 +659,26 @@ class _Spine extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
+            ),
+            // 左侧暗边：书脊是圆柱体，左缘背光
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 1.5,
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.45),
+              ),
+            ),
+            // 右侧棱线高光：1.5px 的近白细线，圆柱体的受光面
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 1.5,
+              child: ColoredBox(
+                color: Colors.white.withValues(alpha: 0.18 + 0.06 * focus),
               ),
             ),
             // inset 3px 0 5px rgba(255,255,255,.05)：左侧高光
@@ -616,15 +823,21 @@ class _VText extends StatelessWidget {
 
 /// 封面（盒子右侧面）：有真图用图，否则用书脊同色系渐变 + 装饰。
 class _CoverFace extends StatelessWidget {
-  const _CoverFace({required this.item, required this.index});
+  const _CoverFace({
+    required this.item,
+    required this.index,
+    this.focus = 0,
+  });
 
   final Item item;
   final int index;
+  final double focus;
 
   @override
   Widget build(BuildContext context) {
     final c = bookColors(item, index);
     final hasCover = item.cover != null;
+    final lift = focus.clamp(0.0, 1.0) * 0.10;
     return DecoratedBox(
       // inset 0 0 0 1px rgba(255,255,255,.1)
       decoration: BoxDecoration(
@@ -734,6 +947,13 @@ class _CoverFace extends StatelessWidget {
                 ),
               ),
             ],
+            // 中心那本被抽出时整体提亮（叠在所有装饰之上）
+            if (lift > 0.001)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: lift),
+                ),
+              ),
           ],
         ),
       ),
