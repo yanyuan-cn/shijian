@@ -70,27 +70,53 @@ class _TvPageState extends State<TvPage> with AutomaticKeepAliveClientMixin {
             ),
             Expanded(
               child: LayoutBuilder(builder: (context, c) {
-                final cardH = math.min(c.maxHeight - 64, 392.0);
-                final cardW = cardH * 2 / 3;
+                // 旧版：卡片基准 230×330，按屏宽的 0.62 缩放
+                final cardW = (c.maxWidth * 0.62).clamp(180.0, 300.0);
+                final cardH = cardW * 330 / 230;
                 return PageView.builder(
                   controller: _pc,
                   physics: const BouncingScrollPhysics(),
                   itemCount: items.length,
                   itemBuilder: (context, i) {
-                    final d = (i - _page).clamp(-2.2, 2.2);
-                    final angle = d * 0.085;
-                    final dy = d.abs() * 16;
+                    final off = (i - _page).clamp(-2.0, 2.0);
+                    final a = off.abs().clamp(0.0, 1.0);
+                    // 中心卡：上抬 26、放大 1.06；两侧卡：左移/下移/旋转/缩到 0.93
+                    final dy = -26 * (1 - a) + 9 * a;
+                    final dx = off * 34;
+                    final angle = off * 7 * math.pi / 180;
+                    final scale = 1.06 - 0.13 * a;
                     return Center(
                       child: Transform.translate(
-                        offset: Offset(0, dy),
+                        offset: Offset(dx, dy),
                         child: Transform.rotate(
                           angle: angle,
-                          child: SizedBox(
-                            width: cardW,
-                            height: cardH,
-                            child: _Card(
-                              item: items[i],
-                              onTap: () => showItemSheet(context, items[i]),
+                          child: Transform.scale(
+                            scale: scale,
+                            child: SizedBox(
+                              width: cardW,
+                              height: cardH,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  _Card(
+                                    item: items[i],
+                                    onTap: () =>
+                                        showItemSheet(context, items[i]),
+                                  ),
+                                  // 亮度 1 → 0.62
+                                  if (a > 0.01)
+                                    IgnorePointer(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.38 * a),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

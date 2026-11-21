@@ -59,7 +59,7 @@ class _SourcesPageState extends State<SourcesPage> {
           const SizedBox(height: 22),
           _label('网络'),
           _field('HTTP 代理 / 中转地址', _proxy,
-              '两种都行：代理填 127.0.0.1:7890；中转填 https://xxx.workers.dev'),
+              '两种都行：代理填 127.0.0.1:7890；中转填 https://meta.你的域名'),
           _switchTile('只让匹配请求走代理', _proxyMetaOnly, (v) {
             setState(() => _proxyMetaOnly = v);
             Settings.proxyOnlyMeta = v;
@@ -86,7 +86,9 @@ class _SourcesPageState extends State<SourcesPage> {
           _hint('· 匹配只是省事，所有字段都能手填，随时能在编辑里改。\n'
               '· 匹配到的封面会下载到本地，之后断网也看得到。\n'
               '· 这一栏填什么，看你手上有什么：\n'
-              '   【有中转服务】填 https://xxx.workers.dev —— 手机不用挂代理，国内直连即可。\n'
+              '   【有中转服务】填你自己的域名（例：https://meta.你的域名）—— 手机不用挂代理，国内直连即可。\n'
+              '     ⚠ 不要填 *.workers.dev：那个域名在国内被墙，会一直握手失败；\n'
+              '       要能在国内用，得在 Cloudflare 里给 Worker 绑一个自己的域名。\n'
               '   【手机有 Clash】填 127.0.0.1:7890 —— 让 App 走手机本地代理。\n'
               '   【电脑有 Clash】填电脑局域网 IP:端口，并在电脑上开「允许局域网连接」。\n'
               '· 带端口（:7890 / :7897）按代理处理，不带端口按中转处理；支持 socks5://。\n'

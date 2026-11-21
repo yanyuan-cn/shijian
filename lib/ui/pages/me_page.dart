@@ -11,6 +11,7 @@ import '../../data/app_state.dart';
 import '../../data/settings.dart';
 import '../../data/zip_io.dart';
 import '../../platform/updater.dart';
+import 'update_page.dart';
 import '../kit.dart';
 import '../theme.dart';
 import 'sources_page.dart';
@@ -80,8 +81,13 @@ class _MePageState extends State<MePage> {
             ]),
             const SizedBox(height: 18),
             _group('关于', [
-              _tile('版本', _ver.isEmpty ? '读取中…' : _ver, Icons.info_outline,
-                  () => Updater.check(context, manual: true)),
+              _tile(
+                  '版本与更新',
+                  _ver.isEmpty ? '更新日志 · 检查更新' : '$_ver · 更新日志与检查更新',
+                  Icons.system_update_outlined, () {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const UpdatePage()));
+              }),
               _tile('存储', _usage.isEmpty ? '计算中…' : _usage,
                   Icons.folder_outlined, _loadUsage),
               _tile('说明', '本地优先：不联也能用，数据只在这台手机上',

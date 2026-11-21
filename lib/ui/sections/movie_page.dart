@@ -67,8 +67,8 @@ class _MoviePageState extends State<MoviePage>
           ),
           child: LayoutBuilder(builder: (context, c) {
             const pad = 16.0;
-            const gapX = 12.0;
-            const gapY = 20.0;
+            final gapX = c.maxWidth < 520 ? 12.0 : 18.0;
+            final gapY = c.maxWidth < 520 ? 20.0 : 26.0;
             final tileW = (c.maxWidth - pad * 2 - gapX * 2) / 3;
             final tileH = tileW * 1.5;
             final vh = c.maxHeight;
@@ -77,7 +77,7 @@ class _MoviePageState extends State<MoviePage>
               physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(pad, 16, pad, 28),
+                  padding: EdgeInsets.fromLTRB(pad, 22, pad, 28),
                   sliver: SliverGrid(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
@@ -95,12 +95,15 @@ class _MoviePageState extends State<MoviePage>
                           animation: _off,
                           builder: (context, child) {
                             final vc = _off.value + vh / 2;
-                            final k = math.min(
-                                (centerY - vc).abs() / (vh * 0.62), 1.0);
+                            // 旧版：k = clamp(dist,0,.85)/.85，
+                            // scale = 1-k*0.32，opacity = 1-k*0.78
+                            final dist =
+                                (centerY - vc).abs() / math.max(1.0, vh / 2);
+                            final k = math.min(dist, 0.85) / 0.85;
                             return Opacity(
-                              opacity: 1 - 0.42 * k,
+                              opacity: 1 - 0.78 * k,
                               child: Transform.scale(
-                                  scale: 1 - 0.1 * k, child: child),
+                                  scale: 1 - 0.32 * k, child: child),
                             );
                           },
                           child: _Poster(item: it),
