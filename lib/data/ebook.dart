@@ -151,6 +151,16 @@ EbookDoc _parseTxt(Uint8List bytes, String name) {
 List<String> _reflow(List<String> lines) {
   final out = <String>[];
   final cur = StringBuffer();
+  // 用「典型行长」判断段末：一本书里绝大多数行是排满的，
+  // 明显短于这个长度的行，通常就是一段的结尾。
+  final lens = lines
+      .map((l) => l.trim().length)
+      .where((n) => n > 0)
+      .toList()
+    ..sort();
+  final typical = lens.isEmpty ? 0 : lens[(lens.length * 3) ~/ 4];
+  final shortAt = typical * 0.72;
+
   for (var i = 0; i < lines.length; i++) {
     final line = lines[i].replaceAll(RegExp(r'[ \t\u00A0]+$'), '');
     final t = line.trim();
@@ -166,14 +176,22 @@ List<String> _reflow(List<String> lines) {
       continue;
     }
     final prev = cur.toString();
-    if (_endsSentence(prev) || _startsNewBlock(t)) {
+    final indented =
+        line.startsWith('\u3000') || line.startsWith('  ') || line.startsWith('　');
+    final breakHere = _endsSentence(prev) ||
+        _startsNewBlock(t) ||
+        indented ||
+        prev.length < shortAt ||
+        _looksCaption(t) ||
+        _headingLevel(t, lines) > 0;
+    if (breakHere) {
       out.add(prev);
       cur.clear();
       cur.write(t);
     } else {
       // 中文接行不需要空格；西文单词之间补一个空格
-      final needSpace =
-          RegExp(r'[A-Za-z0-9,;:]$').hasMatch(prev) && RegExp(r'^[A-Za-z0-9]').hasMatch(t);
+      final needSpace = RegExp(r'[A-Za-z0-9,;:]$').hasMatch(prev) &&
+          RegExp(r'^[A-Za-z0-9]').hasMatch(t);
       if (needSpace) cur.write(' ');
       cur.write(t);
     }

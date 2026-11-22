@@ -9,10 +9,20 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.7.0';
+  static const String current = '1.8.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.8.0',
+      [
+        '正文不再挤成一整段：段落重排改用「典型行长」判断段尾，短行才另起一段',
+        '章标题放大到 1.45 倍、加粗、整行居中（以前只能靠左）',
+        '新增「行距」设置：1.40 – 2.40 可调，和字号并排',
+        '翻页方式改成三选一：仿真 / 平滑 / 上下，随时切换',
+        '修复：阅读器翻页时上一页的字会从当前页字缝里透出来',
+      ],
+    ),
     (
       '1.7.0',
       [

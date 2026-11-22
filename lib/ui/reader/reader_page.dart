@@ -33,6 +33,7 @@ class _ReaderPageState extends State<ReaderPage> {
   List<int> _starts = const [];
   int _page = 0;
   double _fontSize = Settings.readerFontSize;
+  double _lineHeight = Settings.readerLineHeight;
   String _theme = Settings.readerTheme;
   String _turn = Settings.readerTurn;
   bool _menu = false;
@@ -83,7 +84,7 @@ class _ReaderPageState extends State<ReaderPage> {
   TextStyle get _base => TextStyle(
         fontFamily: T.serif,
         fontSize: _fontSize,
-        height: 1.75,
+        height: _lineHeight,
         color: _fg,
         letterSpacing: 0.2,
       );
@@ -101,27 +102,56 @@ class _ReaderPageState extends State<ReaderPage> {
     switch (k) {
       case BlockKind.heading:
         return _base.copyWith(
-          fontSize: _fontSize * (level >= 2 ? 1.12 : 1.3),
+          fontSize: _fontSize * (level >= 2 ? 1.22 : 1.45),
           fontWeight: level >= 2 ? FontWeight.w600 : FontWeight.w700,
-          height: 1.55,
-          letterSpacing: 0.6,
+          height: 1.5,
+          letterSpacing: 1.0,
         );
       case BlockKind.caption:
         return _base.copyWith(
           fontSize: _fontSize * 0.8,
-          height: 1.6,
+          height: _lineHeight,
           color: _fg.withValues(alpha: 0.55),
           letterSpacing: 0.1,
         );
       case BlockKind.quote:
         return _base.copyWith(
           fontSize: _fontSize * 0.96,
-          height: 1.7,
+          height: _lineHeight,
           color: _fg.withValues(alpha: 0.86),
         );
       case BlockKind.para:
         return _base;
     }
+  }
+
+  /// 一页 = 若干块拼起来的 Column：这样章标题才能单独居中，
+  /// 行高/字号/两端对齐也各自生效（整段一个 TextSpan 做不到居中）。
+  Widget _pageWidget(int i) {
+    final doc = _doc;
+    if (doc == null) return const SizedBox.shrink();
+    final s = _starts[i];
+    final e = _starts[i + 1];
+    final kids = <Widget>[];
+    for (final b in doc.blocks) {
+      if (b.end <= s) continue;
+      if (b.offset >= e) break;
+      final from = b.offset < s ? s : b.offset;
+      final to = b.end > e ? e : b.end;
+      if (to <= from) continue;
+      final txt = doc.text.substring(from, to);
+      final heading = b.kind == BlockKind.heading;
+      kids.add(Text(
+        txt.trimRight(),
+        style: _styleFor(b.kind, b.level),
+        textAlign: heading ? TextAlign.center : TextAlign.justify,
+      ));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: kids,
+    );
   }
 
   /// 只取 [s, e) 这一段，按块切给不同样式。
@@ -236,6 +266,16 @@ class _ReaderPageState extends State<ReaderPage> {
     setState(() => _theme = t);
   }
 
+  void _setLineHeight(double v) {
+    final loc = _starts.isEmpty ? 0 : _starts[_page.clamp(0, _starts.length - 2)];
+    Settings.readerLineHeight = v;
+    setState(() {
+      _lineHeight = v;
+      _measured = false;
+      _restoreLoc = loc;
+    });
+  }
+
   void _setTurn(String t) {
     final loc = _starts.isEmpty ? 0 : _starts[_page.clamp(0, _starts.length - 2)];
     Settings.readerTurn = t;
@@ -321,6 +361,18 @@ class _ReaderPageState extends State<ReaderPage> {
                     ),
                   );
                 }
+                if (_turn == 'slide') {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _menu = !_menu),
+                    child: PageView.builder(
+                      controller: PageController(initialPage: _page),
+                      itemCount: count,
+                      onPageChanged: _onPageChanged,
+                      itemBuilder: (_, i) => _pageBody(i),
+                    ),
+                  );
+                }
                 return _FlipView(
                   key: ValueKey('flip-$count-${_fontSize.toStringAsFixed(0)}'),
                   count: count,
@@ -343,10 +395,7 @@ class _ReaderPageState extends State<ReaderPage> {
         child: ClipRect(
           child: Align(
             alignment: Alignment.topLeft,
-            child: Text.rich(
-              _spanFor(_starts[i], _starts[i + 1]),
-              textAlign: TextAlign.justify,
-            ),
+            child: _pageWidget(i),
           ),
         ),
       );
@@ -394,51 +443,106 @@ class _ReaderPageState extends State<ReaderPage> {
           Container(
             color: _bg,
             padding: EdgeInsets.fromLTRB(
-                16, 8, 10, 8 + MediaQuery.of(context).padding.bottom),
-            child: Row(
+                16, 4, 6, 4 + MediaQuery.of(context).padding.bottom),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('字号',
-                    style: TextStyle(
-                        fontSize: 12, color: _fg.withValues(alpha: 0.55))),
-                IconButton(
-                  onPressed: _fontSize > 13 ? () => _setFont(_fontSize - 1) : null,
-                  icon: Icon(Icons.text_decrease, color: _fg, size: 20),
-                  visualDensity: VisualDensity.compact,
+                Row(
+                  children: [
+                    Text('字号',
+                        style: TextStyle(
+                            fontSize: 12, color: _fg.withValues(alpha: 0.55))),
+                    IconButton(
+                      onPressed:
+                          _fontSize > 13 ? () => _setFont(_fontSize - 1) : null,
+                      icon: Icon(Icons.text_decrease, color: _fg, size: 19),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    Text('${_fontSize.toInt()}',
+                        style: TextStyle(fontSize: 13, color: _fg)),
+                    IconButton(
+                      onPressed:
+                          _fontSize < 30 ? () => _setFont(_fontSize + 1) : null,
+                      icon: Icon(Icons.text_increase, color: _fg, size: 19),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const SizedBox(width: 4),
+                    Text('行距',
+                        style: TextStyle(
+                            fontSize: 12, color: _fg.withValues(alpha: 0.55))),
+                    IconButton(
+                      onPressed: _lineHeight > 1.4
+                          ? () => _setLineHeight(_lineHeight - 0.15)
+                          : null,
+                      icon: Icon(Icons.density_medium, color: _fg, size: 19),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    Text(_lineHeight.toStringAsFixed(2),
+                        style: TextStyle(fontSize: 13, color: _fg)),
+                    IconButton(
+                      onPressed: _lineHeight < 2.4
+                          ? () => _setLineHeight(_lineHeight + 0.15)
+                          : null,
+                      icon: Icon(Icons.density_large, color: _fg, size: 19),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const Spacer(),
+                    _themeDot('sepia', const Color(0xFFF2EADA)),
+                    _themeDot('light', const Color(0xFFFAFAF7)),
+                    _themeDot('dark', const Color(0xFF0F1318)),
+                  ],
                 ),
-                Text('${_fontSize.toInt()}',
-                    style: TextStyle(fontSize: 13, color: _fg)),
-                IconButton(
-                  onPressed: _fontSize < 30 ? () => _setFont(_fontSize + 1) : null,
-                  icon: Icon(Icons.text_increase, color: _fg, size: 20),
-                  visualDensity: VisualDensity.compact,
+                Row(
+                  children: [
+                    _turnChip('flip', '仿真'),
+                    const SizedBox(width: 6),
+                    _turnChip('slide', '平滑'),
+                    const SizedBox(width: 6),
+                    _turnChip('scroll', '上下'),
+                    const Spacer(),
+                    if (hasToc)
+                      TextButton.icon(
+                        onPressed: _showToc,
+                        style: TextButton.styleFrom(
+                            foregroundColor: _fg.withValues(alpha: 0.7),
+                            padding: const EdgeInsets.symmetric(horizontal: 6)),
+                        icon: Icon(Icons.list,
+                            size: 16, color: _fg.withValues(alpha: 0.75)),
+                        label:
+                            Text('目录', style: const TextStyle(fontSize: 11.5)),
+                      ),
+                  ],
                 ),
-                const Spacer(),
-                _themeDot('sepia', const Color(0xFFF2EADA)),
-                _themeDot('light', const Color(0xFFFAFAF7)),
-                _themeDot('dark', const Color(0xFF0F1318)),
-                const SizedBox(width: 6),
-                TextButton(
-                  onPressed: () => _setTurn(_turn == 'page' ? 'scroll' : 'page'),
-                  style: TextButton.styleFrom(
-                      foregroundColor: _fg.withValues(alpha: 0.7),
-                      padding: const EdgeInsets.symmetric(horizontal: 6)),
-                  child: Text(_turn == 'page' ? '仿真翻页' : '上下翻页',
-                      style: const TextStyle(fontSize: 11.5)),
-                ),
-                if (hasToc)
-                  TextButton.icon(
-                    onPressed: _showToc,
-                    style: TextButton.styleFrom(
-                        foregroundColor: _fg.withValues(alpha: 0.7),
-                        padding: const EdgeInsets.symmetric(horizontal: 6)),
-                    icon: Icon(Icons.list,
-                        size: 16, color: _fg.withValues(alpha: 0.75)),
-                    label: Text('目录', style: const TextStyle(fontSize: 11.5)),
-                  ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _turnChip(String mode, String label) {
+    final on = _turn == mode;
+    return GestureDetector(
+      onTap: () => _setTurn(mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: on ? _fg.withValues(alpha: 0.14) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: on
+                  ? _fg.withValues(alpha: 0.35)
+                  : _fg.withValues(alpha: 0.15)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            color: _fg.withValues(alpha: on ? 0.95 : 0.55),
+            fontWeight: on ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
       ),
     );
   }
