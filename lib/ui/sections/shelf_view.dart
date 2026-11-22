@@ -279,12 +279,12 @@ class _ShelfViewState extends State<ShelfView>
   // ---- 旧版 stageMetrics()（书厚/书高按用户反馈调厚调大，比例更协调） ----
   _Geo _geo(double w) {
     if (w < 560) {
-      return const _Geo(gap: 76, out: 86, bkW: 212, t: 34, h: 272);
+      return const _Geo(gap: 36, out: 84, bkW: 212, t: 46, h: 272);
     }
     if (w < 980) {
-      return const _Geo(gap: 92, out: 96, bkW: 212, t: 40, h: 288);
+      return const _Geo(gap: 44, out: 92, bkW: 212, t: 54, h: 288);
     }
-    return const _Geo(gap: 106, out: 104, bkW: 262, t: 46, h: 392);
+    return const _Geo(gap: 56, out: 100, bkW: 262, t: 68, h: 392);
   }
 
   @override
@@ -428,8 +428,6 @@ class _ShelfViewState extends State<ShelfView>
       ..rotateY(_tilt);
 
     final spines = <Widget>[];
-    final covers = <Widget>[];
-    Widget? topCover;
     for (var i = 0; i < books.length; i++) {
       final d = i - pos;
       if (d.abs() > 3.4) continue;
@@ -453,19 +451,6 @@ class _ShelfViewState extends State<ShelfView>
         transform: mv(),
         child: RepaintBoundary(child: book(_BookPart.spine)),
       ));
-      covers.add(Transform(
-        alignment: Alignment.center,
-        transform: mv(),
-        child: RepaintBoundary(child: book(_BookPart.cover)),
-      ));
-      // 被推出的那本，封面最后再画一次压在最上层——否则会被右邻的书脊切掉一块。
-      if (k > 0.5) {
-        topCover = Transform(
-          alignment: Alignment.center,
-          transform: mv(),
-          child: RepaintBoundary(child: book(_BookPart.cover)),
-        );
-      }
     }
 
     return Transform(
@@ -477,7 +462,7 @@ class _ShelfViewState extends State<ShelfView>
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
-        children: [...covers, ...spines, if (topCover != null) topCover],
+        children: spines,
       ),
     );
   }
