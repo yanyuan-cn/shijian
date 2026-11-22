@@ -429,6 +429,7 @@ class _ShelfViewState extends State<ShelfView>
 
     final spines = <Widget>[];
     final covers = <Widget>[];
+    Widget? topCover;
     for (var i = 0; i < books.length; i++) {
       final d = i - pos;
       if (d.abs() > 3.4) continue;
@@ -437,7 +438,8 @@ class _ShelfViewState extends State<ShelfView>
       final centered = d.abs() < 0.5;
       // 子元素这里只做纯平移 —— 再写 rotateY/透视会得到每本书独立的透视原点。
       Matrix4 mv() => Matrix4.identity()
-        ..translate(d * g.gap, -k * 11, k * g.out * 1.25);
+        // 被推出的那本往左让半个身位，右侧才有地方完整展示封面（参考轻小说书架）。
+        ..translate(d * g.gap - k * g.gap * 0.55, -k * 11, k * g.out * 1.25);
       _Book book(_BookPart part) => _Book(
             item: books[i],
             index: i,
@@ -456,6 +458,14 @@ class _ShelfViewState extends State<ShelfView>
         transform: mv(),
         child: RepaintBoundary(child: book(_BookPart.cover)),
       ));
+      // 被推出的那本，封面最后再画一次压在最上层——否则会被右邻的书脊切掉一块。
+      if (k > 0.5) {
+        topCover = Transform(
+          alignment: Alignment.center,
+          transform: mv(),
+          child: RepaintBoundary(child: book(_BookPart.cover)),
+        );
+      }
     }
 
     return Transform(
@@ -467,7 +477,7 @@ class _ShelfViewState extends State<ShelfView>
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
-        children: [...covers, ...spines],
+        children: [...covers, ...spines, if (topCover != null) topCover],
       ),
     );
   }
@@ -499,7 +509,7 @@ class _Book extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final coverW = geo.bkW * 0.62;
+    final coverW = geo.bkW * 0.46;
     if (part == _BookPart.cover) {
       return SizedBox(
         width: geo.t,
@@ -509,15 +519,15 @@ class _Book extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Positioned(
-              left: geo.t - 6,
-              top: 0,
+              left: geo.t - 2,
+              top: -4, // 与书脊顶部那条受光切面对齐，避免右上角露出缝
               width: coverW,
-              height: geo.h,
+              height: geo.h + 4,
               child: Transform(
                 alignment: Alignment.centerLeft,
                 transform: Matrix4.identity()
-                  ..setEntry(0, 1, -0.10)
-                  ..setEntry(3, 2, 0.0007),
+                  ..setEntry(0, 1, -0.06)
+                  ..setEntry(3, 2, 0.0005),
                 child: _CoverFace(item: item, index: index, focus: focus),
               ),
             ),

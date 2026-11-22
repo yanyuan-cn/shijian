@@ -9,10 +9,19 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.11.0';
+  static const String current = '1.12.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.12.0',
+      [
+        '书架：封面和书脊的接缝补齐了（右上角不再露缝）',
+        '书架：封面收窄了一点，不再拉得太开，整排更紧凑',
+        '书架：推出来的那本往左让半个身位，右侧完整露出封面，并且压在最上层不被邻书切掉',
+        '图集：修好「给了相册权限还说没权限」——现在按「完全访问/部分访问」都算有权限',
+      ],
+    ),
     (
       '1.11.0',
       [

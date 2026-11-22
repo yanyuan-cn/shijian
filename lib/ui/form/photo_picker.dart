@@ -70,10 +70,13 @@ class _PhotoPickerPageState extends State<_PhotoPickerPage> {
   Future<void> _load() async {
     try {
       final perm = await PhotoManager.requestPermissionExtend();
-      if (!perm.isAuth) {
+      // Android 14 起用户可能只给了「部分照片」，那是 limited 而不是 authorized，
+      // 但同样能读——所以用 hasAccess 判断，别只看 isAuth。
+      if (!perm.hasAccess) {
         setState(() {
           _loading = false;
-          _error = '没有相册权限。到「设置 → 应用 → 拾间 → 权限」里允许访问照片后再试。';
+          _error = '没有相册权限。到「设置 → 应用 → 拾间 → 权限 → 照片和视频」'
+              '里选「允许完全访问」后再试。';
         });
         return;
       }
