@@ -67,7 +67,20 @@ class _BookDetailPageState extends State<BookDetailPage> {
     final assets = await App.I.repo.assetsOf(_live.id);
     final book = assets.where((a) => a.role == 'ebook').toList();
     if (book.isEmpty) {
-      toast(context, '还没有导入电子书，点「编辑」里的导入');
+      toast(context, '还没有导入电子书，点「编辑」里的「选择文件」');
+      return;
+    }
+    final mime = (book.first.mime ?? '').toLowerCase();
+    final name = (book.first.name ?? '').toLowerCase();
+    final unreadable = mime.contains('pdf') ||
+        mime.contains('mobipocket') ||
+        mime.contains('amazon') ||
+        name.endsWith('.pdf') ||
+        name.endsWith('.mobi') ||
+        name.endsWith('.azw3');
+    if (unreadable) {
+      if (!mounted) return;
+      toast(context, '这个格式只做了归档，暂时读不了正文（支持 txt / epub）');
       return;
     }
     if (!mounted) return;

@@ -151,15 +151,43 @@ class _Polaroid extends StatelessWidget {
                       colors: [Color(0x00000000), Color(0x99000000)],
                     ),
                   ),
-                  child: Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      letterSpacing: 0.48,
-                      color: C.text,
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            letterSpacing: 0.48,
+                            color: C.text,
+                          ),
+                        ),
+                      ),
+                      if ((item.metaStr('cat') ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0x33000000),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(color: const Color(0x1FFFFFFF)),
+                          ),
+                          child: Text(
+                            item.metaStr('cat')!.trim(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 0.3,
+                              color: Color(0xCCE7EBF2),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),

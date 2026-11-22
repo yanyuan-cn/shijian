@@ -257,6 +257,8 @@ class _Entry extends StatelessWidget {
 
   Future<void> _openUrl(BuildContext context) async {
     var u = (item.sourceUrl ?? '').trim();
+    // 老数据可能只存了域名（creator），那就按 https 补一个能打开的地址。
+    if (u.isEmpty) u = (item.creator ?? '').trim();
     if (u.isEmpty) {
       toast(context, '这个条目没有网址');
       return;

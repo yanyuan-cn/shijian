@@ -9,10 +9,22 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.5.0';
+  static const String current = '1.6.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.6.0',
+      [
+        '书籍：添加/编辑里新增「电子书文件」入口，支持 txt / epub（可直接阅读）与 pdf / mobi / azw3 / fb2（先归档）',
+        '图集：侧边栏改成按分类分组，底部可以「＋ 新建分类」；主界面卡片右下角显示所属分类',
+        '链接：详情不再是白屏，能看到完整地址并复制',
+        '影视：电影显示「观看进度」可加减或直接设置；剧集改成手输「已看第几集」，进度按集数算',
+        '自动匹配改为多源并行 + 10 分钟缓存，不再一个接一个等，明显变快',
+        '清掉了各版块顶部、底部的提示文案（「左右滑动挑选」这类）',
+        '移除了影视板块的示例数据，新装不再自带电影/剧集',
+      ],
+    ),
     (
       '1.5.0',
       [

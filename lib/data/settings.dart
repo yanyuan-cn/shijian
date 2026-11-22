@@ -62,6 +62,13 @@ class Settings {
   static bool get autoMatch => _p.getBool('autoMatch') ?? true;
   static set autoMatch(bool v) => _p.setBool('autoMatch', v);
 
+  // ---------- 图集分类 ----------
+  /// 用户建过的分类名（图片的 cat 仍是自由文本，这份只是用来让空分类也留得住）。
+  static List<String> get picCats =>
+      (_p.getStringList('picCats') ?? const <String>[]).toList();
+  static Future<void> setPicCats(List<String> v) =>
+      _p.setStringList('picCats', v);
+
   // ---------- 阅读器（设备私有）----------
   static String get readerTheme => _p.getString('readerTheme') ?? 'sepia';
   static set readerTheme(String v) => _p.setString('readerTheme', v);

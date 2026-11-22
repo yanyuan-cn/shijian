@@ -126,10 +126,6 @@ class _TvPageState extends State<TvPage> with AutomaticKeepAliveClientMixin {
                 );
               }),
             ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10, top: 2),
-              child: Text('左右滑动挑选 · 点卡片看详情', style: T.small),
-            ),
           ],
         );
       },
@@ -144,7 +140,7 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final seen = (item.seen ?? 0).clamp(0, 100);
+    final seen = item.epPercent;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -204,7 +200,10 @@ class _Card extends StatelessWidget {
                                 fontSize: 11, color: Colors.white60),
                           ),
                         ),
-                        Text('$seen%',
+                        Text(
+                            item.totalEps > 0
+                                ? '已看 ${item.seenEps}/${item.totalEps}'
+                                : '$seen%',
                             style: const TextStyle(
                                 fontSize: 11,
                                 color: Color(0xFFA7C4FF),

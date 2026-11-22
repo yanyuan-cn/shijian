@@ -405,22 +405,6 @@ class _ShelfViewState extends State<ShelfView>
                     ),
                   ),
                 ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 16,
-                  child: IgnorePointer(
-                    child: Text(
-                      '左右滑动挑选 · 点中间抽出',
-                      textAlign: TextAlign.center,
-                      style: T.kicker.copyWith(
-                        fontSize: 11,
-                        letterSpacing: 1.8,
-                        color: C.text3,
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           );

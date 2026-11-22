@@ -16,8 +16,8 @@ import '../data/settings.dart';
 
 Dio buildDio({bool meta = true}) {
   final dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 12),
-    receiveTimeout: const Duration(seconds: 25),
+    connectTimeout: const Duration(seconds: 8),
+    receiveTimeout: const Duration(seconds: 20),
     headers: {'User-Agent': 'shijian/1.0'},
   ));
   final proxy = Settings.proxy.trim();
@@ -238,19 +238,37 @@ class MetaService {
     return s;
   }
 
+  /// 同一次会话里重复匹配同一个词，直接给上一次的结果（10 分钟内有效）。
+  static final Map<String, ({int at, List<MetaCandidate> list})> _cache = {};
+
   static Future<List<MetaCandidate>> search(String type, String q,
       {int limit = 12}) async {
-    final usable = providers.where((p) => p.supports(type));
-    final out = <MetaCandidate>[];
-    for (final p in usable) {
-      try {
-        final r = await p.search(type, q).timeout(const Duration(seconds: 20));
-        out.addAll(r);
-      } catch (_) {
-        // 单个源挂了不影响其它源，更不影响手工填写
-      }
-      if (out.length >= limit) break;
+    final key = '$type|${q.trim().toLowerCase()}';
+    final hit = _cache[key];
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (hit != null && now - hit.at < 10 * 60 * 1000) {
+      return hit.list.take(limit).toList();
     }
+
+    final usable = providers.where((p) => p.supports(type)).toList();
+    // 并行发，别一个接一个等：慢的源挂掉只是它自己空手而归。
+    final results = await Future.wait(usable.map((p) async {
+      try {
+        return await p.search(type, q).timeout(const Duration(seconds: 7));
+      } catch (_) {
+        return const <MetaCandidate>[];
+      }
+    }));
+
+    final out = <MetaCandidate>[];
+    final seen = <String>{};
+    for (final list in results) {
+      for (final c in list) {
+        final k = '${c.title.trim().toLowerCase()}|${c.creator ?? ''}';
+        if (seen.add(k)) out.add(c);
+      }
+    }
+    _cache[key] = (at: now, list: out);
     return out.take(limit).toList();
   }
 

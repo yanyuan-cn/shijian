@@ -102,7 +102,19 @@ class Item {
 
   /// 阅读/观看进度 0..100。
   int get progress => metaInt('prog');
-  int get seen => metaInt('ep');
+
+  /// 剧集：已看集数（`seen` 与旧版语义不同——旧版当百分比用，容易和总集数冲突）。
+  int get seenEps => metaInt('seen');
+
+  /// 剧集：总集数。
+  int get totalEps => metaInt('ep');
+
+  /// 剧集进度百分比，由 已看/总集数 推出；没有总集数时退回 `prog`。
+  int get epPercent {
+    final total = totalEps;
+    if (total <= 0) return progress.clamp(0, 100);
+    return (seenEps * 100 / total).round().clamp(0, 100);
+  }
 
   Item copyWith({
     String? title,

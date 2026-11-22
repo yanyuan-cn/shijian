@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../core/model.dart';
 import '../data/app_state.dart';
+import '../data/settings.dart';
 import 'kit.dart';
 import 'sections/book_page.dart' show bookColors;
 import 'theme.dart';
@@ -119,7 +120,9 @@ class SideDrawer extends StatelessWidget {
                             _letterRow(context, s.$1, s.$2, s.$3, s.$4,
                                 App.I.of(s.$1).length, s.$5),
                         ]
-                      : [for (final it in items) _itemRow(context, it)],
+                      : type == ST.pic
+                          ? _picGroups(context, items)
+                          : [for (final it in items) _itemRow(context, it)],
                 ),
               ),
               Container(
@@ -180,6 +183,104 @@ class SideDrawer extends StatelessWidget {
     );
   }
 
+  /// 图集：按分类分组列出，末尾给一个「新建分类」。
+  List<Widget> _picGroups(BuildContext context, List<Item> items) {
+    const none = '未分类';
+    final saved = Settings.picCats;
+    final groups = <String, List<Item>>{};
+    for (final it in items) {
+      final c = (it.metaStr('cat') ?? '').trim();
+      groups.putIfAbsent(c.isEmpty ? none : c, () => []).add(it);
+    }
+    final order = <String>[
+      ...saved.where((c) => c.isNotEmpty),
+      ...groups.keys.where((c) => !saved.contains(c) && c != none),
+      if (groups.containsKey(none)) none,
+    ];
+
+    final out = <Widget>[];
+    for (final cat in order) {
+      final list = groups[cat] ?? const <Item>[];
+      out.add(Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+        child: Row(
+          children: [
+            Text(cat,
+                style: const TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w600,
+                    color: C.text2)),
+            const SizedBox(width: 6),
+            Text('${list.length}',
+                style: const TextStyle(fontSize: 10, color: C.text3)),
+          ],
+        ),
+      ));
+      if (list.isEmpty) {
+        out.add(Padding(
+          padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+          child: Text('空', style: TextStyle(fontSize: 11, color: C.text3)),
+        ));
+      }
+      for (final it in list) {
+        out.add(_itemRow(context, it));
+      }
+    }
+    out.add(Padding(
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 4),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _newCategory(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: C.line),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.add, size: 15, color: C.accent2),
+              const SizedBox(width: 8),
+              Text('新建分类',
+                  style: TextStyle(fontSize: 12.5, color: C.accent2)),
+            ],
+          ),
+        ),
+      ),
+    ));
+    return out;
+  }
+
+  Future<void> _newCategory(BuildContext context) async {
+    final ctl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建分类'),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '例如：壁纸 / 截图 / 灵感'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
+              child: const Text('确定')),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final list = Settings.picCats;
+    if (!list.contains(name)) {
+      list.add(name);
+      await Settings.setPicCats(list);
+      if (context.mounted) Navigator.pop(context);
+    }
+  }
+
   Widget _itemRow(BuildContext context, Item it) {
     final (sub, meta) = _subMeta(it);
     final isLink = it.type == ST.link;
@@ -234,8 +335,12 @@ class SideDrawer extends StatelessWidget {
       case ST.movie:
         return (it.year ?? '', '');
       case ST.tv:
-        final e = it.seen;
-        return (it.year ?? '', e <= 0 ? '未看' : '$e%');
+        final total = it.totalEps;
+        final seen = it.seenEps;
+        return (
+          it.year ?? '',
+          total > 0 ? '$seen/$total' : (seen <= 0 ? '未看' : '$seen 集')
+        );
       case ST.pic:
         return (it.metaStr('cat') ?? '未分类', '');
       default:

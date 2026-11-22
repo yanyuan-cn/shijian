@@ -51,6 +51,8 @@ class _ItemFormState extends State<ItemForm> {
   String? _cover;
   Uint8List? _pendingBytes;
   String? _pendingName;
+  Uint8List? _ebookBytes;
+  String? _ebookName;
   bool _busy = false;
   String _status = '';
 
@@ -86,8 +88,20 @@ class _ItemFormState extends State<ItemForm> {
     if (it != null) {
       _status = it.status ?? '';
       _cover = it.cover;
+      if (it.type == ST.book) _loadEbookName(it.id);
     }
     if (_isLink) _ctl['source_url']?.addListener(_syncDomain);
+  }
+
+  /// 编辑已有书时，把已导入的电子书名读出来显示。
+  Future<void> _loadEbookName(String itemId) async {
+    final assets = await App.I.repo.assetsOf(itemId);
+    for (final a in assets) {
+      if (a.role == 'ebook') {
+        if (mounted) setState(() => _ebookName = a.name ?? '已导入的电子书');
+        return;
+      }
+    }
   }
 
   void _syncDomain() {
@@ -244,11 +258,13 @@ class _ItemFormState extends State<ItemForm> {
         await App.I.save(widget.item!, values,
             coverHash: coverHash,
             clearCover: coverHash == null && _cover == null);
+        await _saveEbook(widget.item!.id);
         if (!mounted) return;
         toast(context, '已保存');
       } else {
-        await App.I.create(
+        final created = await App.I.create(
             type: widget.type, values: values, coverHash: coverHash);
+        await _saveEbook(created.id);
         if (!mounted) return;
         toast(context, '已收藏');
       }
@@ -361,6 +377,8 @@ class _ItemFormState extends State<ItemForm> {
                   if (widget.type == ST.book) ...[
                     const SizedBox(height: 14),
                     _isbnRow(),
+                    const SizedBox(height: 14),
+                    _ebookRow(),
                   ],
                   const SizedBox(height: 14),
                   ..._buildFields(),
@@ -371,6 +389,115 @@ class _ItemFormState extends State<ItemForm> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 电子书文件：txt / epub 能读，pdf / mobi / azw3 先只做归档。
+  Widget _ebookRow() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _label('电子书文件'),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: C.panel2,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: C.line),
+                  ),
+                  child: Text(
+                    _ebookLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: _ebookName == null && _ebookBytes == null
+                          ? C.text3
+                          : C.text,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              _miniAction('选择文件', _pickEbook),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '支持 txt / epub（可直接阅读）、pdf / mobi / azw3 / fb2（仅归档）。'
+            '导入后就能在详情页「阅读」里打开。',
+            style: T.small.copyWith(fontSize: 10.5, height: 1.45),
+          ),
+        ],
+      );
+
+  String get _ebookLabel {
+    if (_ebookBytes != null) return _ebookName ?? '已选择文件';
+    if (_ebookName != null) return _ebookName!;
+    return '未选择（可选）';
+  }
+
+  Future<void> _pickEbook() async {
+    try {
+      final list = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['txt', 'epub', 'pdf', 'mobi', 'azw3', 'fb2', 'md'],
+      );
+      if (list.isEmpty) return;
+      final f = list.firstOrNull;
+      if (f == null) return;
+      final bytes = await f.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _ebookBytes = bytes;
+        _ebookName = f.name;
+      });
+    } catch (e) {
+      if (mounted) toast(context, '选择文件失败：$e');
+    }
+  }
+
+  Widget _miniAction(String text, VoidCallback onTap) => GestureDetector(
+        onTap: _busy ? null : onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+          decoration: BoxDecoration(
+            color: C.panel2,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: C.line),
+          ),
+          child: Text(text,
+              style: TextStyle(fontSize: 12.5, color: C.accent2)),
+        ),
+      );
+
+  /// 保存后把电子书落盘 + 建 asset 记录。
+  Future<void> _saveEbook(String itemId) async {
+    final bytes = _ebookBytes;
+    if (bytes == null) return;
+    final name = _ebookName ?? 'book.txt';
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : 'txt';
+    const mimeMap = {
+      'txt': 'text/plain',
+      'epub': 'application/epub+zip',
+      'pdf': 'application/pdf',
+      'mobi': 'application/x-mobipocket-ebook',
+      'azw3': 'application/vnd.amazon.ebook',
+      'fb2': 'application/x-fictionbook+xml',
+      'md': 'text/markdown',
+    };
+    final hash = await App.I.blobs.put(bytes);
+    await App.I.repo.addAsset(
+      itemId: itemId,
+      role: 'ebook',
+      hash: hash,
+      mime: mimeMap[ext] ?? 'application/octet-stream',
+      name: name,
+      size: bytes.length,
+      primary: true,
     );
   }
 

@@ -77,13 +77,21 @@ class _ItemSheet extends StatelessWidget {
                         const SizedBox(height: 18),
                         for (final r in spec.rows) _kv(r.$1, r.$2),
                       ],
-                      if (it.progress != null) ...[
+                      if (it.type == ST.book) ...[
                         const SizedBox(height: 18),
-                        _progress(it),
+                        _bookProgress(it),
+                      ],
+                      if (it.type == ST.movie) ...[
+                        const SizedBox(height: 18),
+                        _movieProgress(context, it),
                       ],
                       if (it.type == ST.tv) ...[
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 18),
                         _tvProgress(context, it),
+                      ],
+                      if (it.type == ST.link) ...[
+                        const SizedBox(height: 18),
+                        _linkBlock(it),
                       ],
                       const SizedBox(height: 20),
                       _actions(context, it),
@@ -186,47 +194,138 @@ class _ItemSheet extends StatelessWidget {
         ),
       );
 
-  Widget _progress(Item it) {
-    final p = (it.progress ?? 0) / 100;
+  /// 书：阅读进度（只读展示，改它要在阅读器里翻页）。
+  Widget _bookProgress(Item it) {
+    final p = it.progress.clamp(0, 100);
+    return _bar(
+      label: '阅读进度',
+      trailing: '$p%',
+      value: p / 100,
+    );
+  }
+
+  /// 电影：观看进度，可手动改（很多人是分几次看完的）。
+  Widget _movieProgress(BuildContext context, Item it) {
+    final p = it.progress.clamp(0, 100);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _bar(label: '观看进度', trailing: '$p%', value: p / 100),
+        const SizedBox(height: 8),
         Row(
           children: [
-            Text('阅读进度', style: T.small),
+            _miniBtn(Icons.remove, () => _setProg(it, p - 10)),
+            const SizedBox(width: 8),
+            _miniBtn(Icons.add, () => _setProg(it, p + 10)),
             const Spacer(),
-            Text('${it.progress}%', style: T.small.copyWith(color: C.accent2)),
+            TextButton(
+              onPressed: () => _editProg(context, it),
+              child: const Text('设置进度', style: TextStyle(fontSize: 12)),
+            ),
+            TextButton(
+              onPressed: () => _setProg(it, 100),
+              child: const Text('看完', style: TextStyle(fontSize: 12)),
+            ),
           ],
-        ),
-        const SizedBox(height: 7),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: LinearProgressIndicator(
-            value: p.clamp(0, 1),
-            minHeight: 4,
-            backgroundColor: C.panel2,
-            valueColor: const AlwaysStoppedAnimation(C.accent),
-          ),
         ),
       ],
     );
   }
 
+  /// 剧集：按「已看集数 / 总集数」记进度，集数可以手动输入。
   Widget _tvProgress(BuildContext context, Item it) {
-    final seen = it.seen ?? 0;
-    return Row(
+    final total = it.totalEps;
+    final seen = it.seenEps.clamp(0, total > 0 ? total : 9999);
+    final pct = it.epPercent;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('已看 $seen%', style: T.small),
-        const Spacer(),
-        _miniBtn(Icons.remove, () => _bump(it, -10)),
-        const SizedBox(width: 8),
-        _miniBtn(Icons.add, () => _bump(it, 10)),
-        const SizedBox(width: 10),
-        TextButton(
-          onPressed: () => _bump(it, 100 - seen),
-          child: const Text('看完', style: TextStyle(fontSize: 12)),
+        _bar(
+          label: total > 0 ? '已看 $seen / $total 集' : '已看 $seen 集',
+          trailing: '$pct%',
+          value: pct / 100,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _miniBtn(Icons.remove, () => _setSeen(it, seen - 1)),
+            const SizedBox(width: 8),
+            _miniBtn(Icons.add, () => _setSeen(it, seen + 1)),
+            const Spacer(),
+            TextButton(
+              onPressed: () => _editSeen(context, it),
+              child: const Text('设置集数', style: TextStyle(fontSize: 12)),
+            ),
+            if (total > 0)
+              TextButton(
+                onPressed: () => _setSeen(it, total),
+                child: const Text('看完', style: TextStyle(fontSize: 12)),
+              ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _bar({
+    required String label,
+    required String trailing,
+    required double value,
+  }) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(label, style: T.small),
+              const Spacer(),
+              Text(trailing, style: T.small.copyWith(color: C.accent2)),
+            ],
+          ),
+          const SizedBox(height: 7),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: value.clamp(0.0, 1.0),
+              minHeight: 4,
+              backgroundColor: C.panel2,
+              valueColor: const AlwaysStoppedAnimation(C.accent),
+            ),
+          ),
+        ],
+      );
+
+  /// 链接：把完整地址摆出来（可选中复制），再给一个显眼的打开按钮。
+  Widget _linkBlock(Item it) {
+    final raw = it.sourceUrl?.trim();
+    final url = (raw != null && raw.isNotEmpty)
+        ? raw
+        : (it.creator != null && it.creator!.isNotEmpty
+            ? 'https://${it.creator}'
+            : '');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+      decoration: BoxDecoration(
+        color: C.panel2,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: C.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('链接地址', style: T.small.copyWith(fontSize: 10.5)),
+          const SizedBox(height: 6),
+          if (url.isEmpty)
+            Text('还没填地址，点下面「编辑」补上',
+                style: T.bodyDim.copyWith(fontSize: 12.5))
+          else
+            SelectableText(
+              url,
+              style: T.bodyDim.copyWith(fontSize: 12.5, height: 1.45),
+            ),
+        ],
+      ),
     );
   }
 
@@ -243,13 +342,78 @@ class _ItemSheet extends StatelessWidget {
         ),
       );
 
-  Future<void> _bump(Item it, int delta) async {
-    final v = ((it.seen ?? 0) + delta).clamp(0, 100);
+  Future<void> _setProg(Item it, int value) async {
+    final v = value.clamp(0, 100);
     final next = it
-        .withMeta({'seen': v})
-        .copyWith(updatedAt: DateTime.now().millisecondsSinceEpoch, rev: it.rev + 1);
+        .withMeta({'prog': v})
+        .copyWith(
+            updatedAt: DateTime.now().millisecondsSinceEpoch, rev: it.rev + 1);
     await App.I.repo.upsert(next);
     await App.I.reload();
+  }
+
+  Future<void> _setSeen(Item it, int value) async {
+    final total = it.totalEps;
+    final v = value.clamp(0, total > 0 ? total : 9999);
+    final patch = <String, dynamic>{'seen': v};
+    // 顺带把百分比也算出来，方便列表/侧边栏在不看总集数时也能显示
+    if (total > 0) patch['prog'] = (v * 100 / total).round();
+    final next = it.withMeta(patch).copyWith(
+        updatedAt: DateTime.now().millisecondsSinceEpoch, rev: it.rev + 1);
+    await App.I.repo.upsert(next);
+    await App.I.reload();
+  }
+
+  Future<void> _editProg(BuildContext context, Item it) async {
+    final ctl = TextEditingController(text: '${it.progress}');
+    final v = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('观看进度'),
+        content: TextField(
+          controller: ctl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(suffixText: '%', hintText: '0 – 100'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+              onPressed: () =>
+                  Navigator.pop(ctx, int.tryParse(ctl.text.trim()) ?? 0),
+              child: const Text('确定')),
+        ],
+      ),
+    );
+    if (v != null) await _setProg(it, v);
+  }
+
+  Future<void> _editSeen(BuildContext context, Item it) async {
+    final ctl = TextEditingController(text: '${it.seenEps}');
+    final v = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('已看集数'),
+        content: TextField(
+          controller: ctl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: it.totalEps > 0 ? '0 – ${it.totalEps}' : '已看到第几集',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+              onPressed: () =>
+                  Navigator.pop(ctx, int.tryParse(ctl.text.trim()) ?? 0),
+              child: const Text('确定')),
+        ],
+      ),
+    );
+    if (v != null) await _setSeen(it, v);
   }
 
   Widget _actions(BuildContext context, Item it) {
@@ -352,7 +516,14 @@ class SectionSpecView {
     final chips = <String>[];
     if (it.rating != null) chips.add('★ ${it.rating}');
     if (it.status != null) chips.add(it.status!);
-    final tags = (it.meta['tags'] as List?)?.whereType<String>() ?? const [];
+    // tags 在 meta 里是逗号分隔的字符串（旧数据可能存成数组），两种都要认。
+    final rawTags = it.meta['tags'];
+    final tags = <String>[
+      if (rawTags is List)
+        ...rawTags.whereType<String>()
+      else if (rawTags is String)
+        ...rawTags.split(RegExp(r'[,，;；、\s]+')).where((e) => e.isNotEmpty),
+    ];
     chips.addAll(tags);
 
     final rows = <(String, String)>[];
@@ -371,7 +542,6 @@ class SectionSpecView {
         add('主演', it.metaStr('cast'));
       case ST.tv:
         add('类型', it.metaStr('genre'));
-        add('集数', it.metaStr('ep'));
       case ST.pic:
         add('分类', it.metaStr('cat'));
         add('尺寸', it.metaStr('wh'));
