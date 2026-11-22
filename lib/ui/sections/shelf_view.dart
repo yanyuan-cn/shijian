@@ -279,7 +279,7 @@ class _ShelfViewState extends State<ShelfView>
   // ---- 旧版 stageMetrics()（书厚/书高按用户反馈调厚调大，比例更协调） ----
   _Geo _geo(double w) {
     if (w < 560) {
-      return const _Geo(gap: 36, out: 84, bkW: 212, t: 46, h: 272);
+      return const _Geo(gap: 40, out: 84, bkW: 212, t: 46, h: 272);
     }
     if (w < 980) {
       return const _Geo(gap: 44, out: 92, bkW: 212, t: 54, h: 288);
@@ -421,25 +421,10 @@ class _ShelfViewState extends State<ShelfView>
   Widget _rig(List<Item> books, _Geo g, double pos) {
     // 每本书的盒子宽度是 bkW（书脊 bkT + 右侧封面窄条），书脊贴在盒子左边；
     // 盒子居中时书脊会偏左 (bkW - t)/2，整体右移回来，聚焦那本的**书脊**才落在正中。
-    final shift = 0.0;
-    // 两端不留白：整排左端（或右端）还没顶到边距时，把整排往那边挪。
-    // 这样第一本在最左时贴左边距，最后一本贴右边距，两边留白一致。
-    // 如果整排比屏幕窄，就直接居中（左右留白相等）。
-    final w = _lastW;
-    final edge = 16.0 + g.t / 2;
-    final center = w / 2;
-    final leftMost = center - pos * g.gap * _cosT;
-    final rightMost = center + (books.length - 1 - pos) * g.gap * _cosT;
-    final span = (books.length - 1) * g.gap * _cosT;
-    var extra = 0.0;
-    if (span + g.t <= w - 32) {
-      final target = (w - (span + g.t)) / 2 + g.t / 2;
-      extra = target - leftMost;
-    } else if (leftMost > edge) {
-      extra = -(leftMost - edge);
-    } else if (rightMost < w - edge) {
-      extra = (w - edge) - rightMost;
-    }
+    // 固定 9 个位置：中间那本始终在正中，左右各有 4 格。
+    // 到头也不推挤（第一本时左边 4 格就是空的），这样每一屏观感完全一致。
+    const shift = 0.0;
+    const extra = 0.0;
     final rig = Matrix4.identity()
       ..setEntry(3, 2, -1 / 1500) // CSS perspective:1500px → 必须是负值
       ..translate(shift + extra, 0.0, 0.0)
@@ -448,7 +433,7 @@ class _ShelfViewState extends State<ShelfView>
     final spines = <Widget>[];
     for (var i = 0; i < books.length; i++) {
       final d = i - pos;
-      if (d.abs() > 3.4) continue;
+      if (d.abs() > 4.6) continue;
       final k0 = (1 - d.abs() / 1.12).clamp(0.0, 1.0);
       final k = k0 * k0 * (3 - 2 * k0); // smoothstep
       final centered = d.abs() < 0.5;
