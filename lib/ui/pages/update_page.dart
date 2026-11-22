@@ -9,10 +9,17 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.14.0';
+  static const String current = '1.15.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.15.0',
+      [
+        '书架：不再从屏幕中间开始——书多时第一本贴左边距、最后一本贴右边距，两边留白一致',
+        '书架：书少到一屏放得下时，整排居中，左右留白相等',
+      ],
+    ),
     (
       '1.14.0',
       [

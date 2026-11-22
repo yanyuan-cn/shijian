@@ -421,10 +421,28 @@ class _ShelfViewState extends State<ShelfView>
   Widget _rig(List<Item> books, _Geo g, double pos) {
     // 每本书的盒子宽度是 bkW（书脊 bkT + 右侧封面窄条），书脊贴在盒子左边；
     // 盒子居中时书脊会偏左 (bkW - t)/2，整体右移回来，聚焦那本的**书脊**才落在正中。
-    final shift = (g.bkW - g.t) / 2;
+    final shift = 0.0;
+    // 两端不留白：整排左端（或右端）还没顶到边距时，把整排往那边挪。
+    // 这样第一本在最左时贴左边距，最后一本贴右边距，两边留白一致。
+    // 如果整排比屏幕窄，就直接居中（左右留白相等）。
+    final w = _lastW;
+    final edge = 16.0 + g.t / 2;
+    final center = w / 2;
+    final leftMost = center - pos * g.gap * _cosT;
+    final rightMost = center + (books.length - 1 - pos) * g.gap * _cosT;
+    final span = (books.length - 1) * g.gap * _cosT;
+    var extra = 0.0;
+    if (span + g.t <= w - 32) {
+      final target = (w - (span + g.t)) / 2 + g.t / 2;
+      extra = target - leftMost;
+    } else if (leftMost > edge) {
+      extra = -(leftMost - edge);
+    } else if (rightMost < w - edge) {
+      extra = (w - edge) - rightMost;
+    }
     final rig = Matrix4.identity()
       ..setEntry(3, 2, -1 / 1500) // CSS perspective:1500px → 必须是负值
-      ..translate(shift, 0.0, 0.0)
+      ..translate(shift + extra, 0.0, 0.0)
       ..rotateY(_tilt);
 
     final spines = <Widget>[];
