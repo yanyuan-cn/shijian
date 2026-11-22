@@ -19,6 +19,7 @@ import '../../data/settings.dart';
 import '../kit.dart';
 import '../theme.dart';
 import 'match_sheet.dart';
+import 'photo_picker.dart';
 import '../../net/meta.dart';
 
 class ItemForm extends StatefulWidget {
@@ -134,6 +135,32 @@ class _ItemFormState extends State<ItemForm> {
   }
 
   Future<void> _pickCover() async {
+    // 图集走自建相册选择器：能多选、能拿到相册 asset id（导入后可删原件）。
+    if (_isPic) {
+      try {
+        final res = await showPhotoPicker(context);
+        if (res == null || res.photos.isEmpty) return;
+        final first = res.photos.first;
+        setState(() {
+          _pendingBytes = first.bytes;
+          _pendingName = first.name;
+          _meta['ar'] = _pendingAspect;
+          _extras = res.photos.skip(1).toList();
+          _deleteOriginals = res.deleteAfter;
+          _pickedIds = res.photos.map((e) => e.id).toList();
+        });
+        if (_title.text.trim().isEmpty) {
+          final n = first.name;
+          final dot = n.lastIndexOf('.');
+          _title.text = dot > 0 ? n.substring(0, dot) : n;
+        }
+        await _fillAspect(first.bytes);
+        return;
+      } catch (e) {
+        // 相册权限/插件异常时退回系统选图器，至少能导入。
+        if (mounted) toast(context, '相册选择器不可用，改用系统选图：$e');
+      }
+    }
     try {
       final x = await ImagePicker().pickImage(
         source: ImageSource.gallery,
@@ -158,7 +185,38 @@ class _ItemFormState extends State<ItemForm> {
     }
   }
 
+  /// 图集多选时，除第一张以外剩下的照片（保存时各建一条）。
+  List<PickedPhoto> _extras = const [];
+
+  /// 是否在导入成功后删除相册原图。
+  bool _deleteOriginals = false;
+
+  /// 本次从相册选中的 asset id（删原件用）。
+  List<String> _pickedIds = const [];
+
   double _pendingAspect = 1.2;
+
+  /// 同步拿宽高比（给多选出来的额外图片用，省得 await 一串）。
+  double _aspectOf(Uint8List bytes) {
+    final buf = bytes.buffer.asUint8List();
+    // PNG: 16..24 是宽高；JPEG 需要解析 SOF，这里简单扫一遍。
+    if (buf.length > 24 && buf[0] == 0x89 && buf[1] == 0x50) {
+      final w = (buf[16] << 24) | (buf[17] << 16) | (buf[18] << 8) | buf[19];
+      final h = (buf[20] << 24) | (buf[21] << 16) | (buf[22] << 8) | buf[23];
+      if (w > 0 && h > 0) return w / h;
+    }
+    for (var i = 2; i + 9 < buf.length; i++) {
+      if (buf[i] != 0xFF) continue;
+      final m = buf[i + 1];
+      if (m >= 0xC0 && m <= 0xCF && m != 0xC4 && m != 0xC8 && m != 0xCC) {
+        final h = (buf[i + 5] << 8) | buf[i + 6];
+        final w = (buf[i + 7] << 8) | buf[i + 8];
+        if (w > 0 && h > 0) return w / h;
+        break;
+      }
+    }
+    return _pendingAspect;
+  }
 
   Future<void> _fillAspect(Uint8List bytes) async {
     try {
@@ -265,8 +323,26 @@ class _ItemFormState extends State<ItemForm> {
         final created = await App.I.create(
             type: widget.type, values: values, coverHash: coverHash);
         await _saveEbook(created.id);
+        // 图集多选：第一张已经建成上面这条，其余几张各建一条（共用同样的分类/标签/备注）。
+        for (final p in _extras) {
+          final h = await App.I.putCover(p.bytes);
+          final ar = _aspectOf(p.bytes);
+          final m2 = Map<String, dynamic>.from(meta);
+          if (_isPic) m2['ar'] = ar;
+          final name = p.name;
+          final dot = name.lastIndexOf('.');
+          await App.I.create(type: widget.type, values: {
+            ...values,
+            'title': dot > 0 ? name.substring(0, dot) : name,
+            'meta': m2,
+          }, coverHash: h);
+        }
+        // 用户勾了「导入后删除相册原图」：交给系统确认框。
+        if (_deleteOriginals && _pickedIds.isNotEmpty) {
+          await deleteFromGallery(_pickedIds);
+        }
         if (!mounted) return;
-        toast(context, '已收藏');
+        toast(context, _extras.isEmpty ? '已收藏' : '已收藏 ${_extras.length + 1} 张');
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -720,6 +796,29 @@ class _ItemFormState extends State<ItemForm> {
             ),
           ],
         );
+      case FieldKind.category:
+        final cats = _allCategories();
+        final cur = (_ctl[f.key]?.text ?? '').trim();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _label(f.label),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final o in cats)
+                  _chip(o, cur == o, () {
+                    setState(() {
+                      _ctl[f.key]!.text = cur == o ? '' : o;
+                    });
+                  }),
+                _chip('＋ 新建', false, () => _newCategory(f)),
+              ],
+            ),
+          ],
+        );
       case FieldKind.multiline:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -778,6 +877,49 @@ class _ItemFormState extends State<ItemForm> {
           ],
         );
     }
+  }
+
+  /// 图集分类的候选：设置里存过的 + 库里已经在用的，去重排序。
+  List<String> _allCategories() {
+    final set = <String>{};
+    set.addAll(Settings.picCats);
+    for (final it in App.I.of(ST.pic)) {
+      final c = it.metaStr('cat');
+      if (c != null && c.trim().isNotEmpty) set.add(c.trim());
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  Future<void> _newCategory(FieldSpec f) async {
+    final ctl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.panel,
+        title: const Text('新建分类'),
+        content: TextField(
+          controller: ctl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '例如：壁纸 / 截图 / 配色'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
+            child: const Text('建好'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final cats = Settings.picCats;
+    if (!cats.contains(name)) {
+      cats.add(name);
+      await Settings.setPicCats(cats);
+    }
+    if (!mounted) return;
+    setState(() => _ctl[f.key]!.text = name);
   }
 
   /// 多选字段（类型）：把「/、,」分隔的字符串拆成集合。

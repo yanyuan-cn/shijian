@@ -4,7 +4,17 @@
 /// 搜索、导入导出、备份全都不用动。
 library;
 
-enum FieldKind { text, number, multiline, choice, multi, tags, image, color }
+enum FieldKind {
+  text,
+  number,
+  multiline,
+  choice,
+  multi,
+  category,
+  tags,
+  image,
+  color,
+}
 
 /// 影视「类型」的预设项（可多选，也可自己补）。
 const List<String> kGenres = [
@@ -119,7 +129,8 @@ class SectionSpec {
     titleHint: '可以留空，用文件名',
     coverLabel: '图片',
     fields: [
-      FieldSpec('m:cat', label: '分类', half: true, hint: '壁纸 / 收藏'),
+      FieldSpec('m:cat', label: '分类', kind: FieldKind.category, half: true,
+          hint: '选一个，或新建'),
       FieldSpec('m:tags', label: '标签', kind: FieldKind.tags, half: true),
       FieldSpec('note', label: '备注', kind: FieldKind.multiline),
     ],

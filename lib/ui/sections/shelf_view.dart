@@ -279,12 +279,12 @@ class _ShelfViewState extends State<ShelfView>
   // ---- 旧版 stageMetrics()（书厚/书高按用户反馈调厚调大，比例更协调） ----
   _Geo _geo(double w) {
     if (w < 560) {
-      return const _Geo(gap: 74, out: 86, bkW: 212, t: 56, h: 272);
+      return const _Geo(gap: 76, out: 86, bkW: 212, t: 34, h: 272);
     }
     if (w < 980) {
-      return const _Geo(gap: 88, out: 96, bkW: 212, t: 56, h: 288);
+      return const _Geo(gap: 92, out: 96, bkW: 212, t: 40, h: 288);
     }
-    return const _Geo(gap: 98, out: 104, bkW: 262, t: 64, h: 392);
+    return const _Geo(gap: 106, out: 104, bkW: 262, t: 46, h: 392);
   }
 
   @override
@@ -427,7 +427,8 @@ class _ShelfViewState extends State<ShelfView>
       ..translate(shift, 0.0, 0.0)
       ..rotateY(_tilt);
 
-    final widgets = <Widget>[];
+    final spines = <Widget>[];
+    final covers = <Widget>[];
     for (var i = 0; i < books.length; i++) {
       final d = i - pos;
       if (d.abs() > 3.4) continue;
@@ -435,36 +436,47 @@ class _ShelfViewState extends State<ShelfView>
       final k = k0 * k0 * (3 - 2 * k0); // smoothstep
       final centered = d.abs() < 0.5;
       // 子元素这里只做纯平移 —— 再写 rotateY/透视会得到每本书独立的透视原点。
-      // 绘制顺序 = i 递增：右手的书在 -26° 旋转下 z 更大（更靠近镜头），后画即遮挡左侧。
-      widgets.add(Transform(
-        alignment: Alignment.center,
-        transform: Matrix4.identity()
-          ..translate(d * g.gap, -k * 11, k * g.out * 1.25),
-        child: RepaintBoundary(
-          child: _Book(
+      Matrix4 mv() => Matrix4.identity()
+        ..translate(d * g.gap, -k * 11, k * g.out * 1.25);
+      _Book book(_BookPart part) => _Book(
             item: books[i],
             index: i,
             geo: g,
             centered: centered,
             focus: k,
-          ),
-        ),
+            part: part,
+          );
+      spines.add(Transform(
+        alignment: Alignment.center,
+        transform: mv(),
+        child: RepaintBoundary(child: book(_BookPart.spine)),
+      ));
+      covers.add(Transform(
+        alignment: Alignment.center,
+        transform: mv(),
+        child: RepaintBoundary(child: book(_BookPart.cover)),
       ));
     }
 
     return Transform(
       alignment: Alignment.center,
       transform: rig,
+      // 两趟绘制：先所有书脊，再所有封面。
+      // 这样每本书的封面会压住右边那本的书脊 —— 参考轻小说书架的观感
+      // （薄书脊 + 大片封面交替叠压），单趟「书脊盖封面」只会看到一条窄缝。
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
-        children: widgets,
+        children: [...covers, ...spines],
       ),
     );
   }
 }
 
 /// 一本书 = 三维盒子（封面 → 书顶高光 → 书脊，后者盖前者）。
+/// 分成两趟画（见 `_rig`）：先全部书脊，再全部封面。
+enum _BookPart { spine, cover }
+
 class _Book extends StatelessWidget {
   const _Book({
     required this.item,
@@ -472,6 +484,7 @@ class _Book extends StatelessWidget {
     required this.geo,
     required this.centered,
     this.focus = 0,
+    this.part = _BookPart.spine,
   });
 
   final Item item;
@@ -482,8 +495,36 @@ class _Book extends StatelessWidget {
   /// 0 = 两侧的书，1 = 正中间那本（被抽出）。
   final double focus;
 
+  final _BookPart part;
+
   @override
   Widget build(BuildContext context) {
+    final coverW = geo.bkW * 0.62;
+    if (part == _BookPart.cover) {
+      return SizedBox(
+        width: geo.t,
+        height: geo.h,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Positioned(
+              left: geo.t - 6,
+              top: 0,
+              width: coverW,
+              height: geo.h,
+              child: Transform(
+                alignment: Alignment.centerLeft,
+                transform: Matrix4.identity()
+                  ..setEntry(0, 1, -0.10)
+                  ..setEntry(3, 2, 0.0007),
+                child: _CoverFace(item: item, index: index, focus: focus),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return SizedBox(
       width: geo.t,
       height: geo.h,
@@ -517,24 +558,7 @@ class _Book extends StatelessWidget {
               ),
             ),
           ),
-          // 封面（盒子右侧面）：先绕 Y 转 -90° 把宽度方向变成深度方向，
-          // 再平移到 x=+bkT/2。经 rig 的 -26° 旋转后，这块面投影到书脊左侧。
-          // OverflowBox 是必须的：Stack 给的约束宽度只有 bkT，不放开的话
-          // SizedBox(bkW) 会被夹成 bkT，封面就只剩一条 40px 的窄边。
-          // 封面不绕 Y 转 90°：那样投影面积恰好为 0，Skia 会直接丢掉
-          // （实测像素完全不变）。这里改成「预先横向压缩好的竖条」，
-          // 宽度 = bkW·tan26° ≈ 0.488·bkW，正好等于该面在 -26° 下的投影宽度；
-          // 而 rig 又会整体再压一次 cos26°，所以这里除回来 *1/cos26，
-          // 即 tan26/cos26。竖条左端压进书脊 10px，右端被下一本书挡住。
-          Positioned(
-            left: geo.t - 2,
-            top: 0,
-            // 封面按 -26° 的投影宽度铺开，但只露出「到下一本书脊前」那一条（≈26px）：
-            // 铺满整宽的话，全排最后一本没有邻居遮挡，会变成一大块空面板。
-            width: math.min(geo.bkW * 0.488 / 0.899, geo.gap - geo.t + 4),
-            height: geo.h,
-            child: _CoverFace(item: item, index: index, focus: focus),
-          ),
+          // 封面在另一趟里单独画（见 _BookPart.cover / _rig 的两趟 Stack）。
           // 书脊（正面）：z=+bkW/2
           Transform(
             alignment: Alignment.center,

@@ -9,10 +9,21 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.10.0';
+  static const String current = '1.11.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.11.0',
+      [
+        '书架：书变薄了（书脊变窄、封面露出更宽的一块），整排更像真书架上密排的书',
+        '书架：封面改成压在书脊前面的一层斜切面，不再是「竖着嵌进去的一条」',
+        '书架：整排最后一本也有完整的封面（之前只有书脊）',
+        '图集：上传时「分类」改成从已有分类里选，也可以「＋ 新建」',
+        '图集：选图用自建的相册选择器，可多选一次导入多张',
+        '图集：勾选「导入后从相册删除原图」，导入后手机相册里不再留重复文件（会弹一次系统确认）',
+      ],
+    ),
     (
       '1.10.0',
       [
