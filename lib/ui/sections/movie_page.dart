@@ -209,6 +209,19 @@ class _Poster extends StatelessWidget {
                             fontWeight: FontWeight.w600)),
                   ),
                 ),
+              // 左上角：想看 / 在看 / 看完
+              Positioned(
+                left: 6,
+                top: 6,
+                child: StatusPill(
+                  label: watchStatus(
+                    progress: item.progress ?? 0,
+                    done: (item.progress ?? 0) >= 100,
+                    started: (item.progress ?? 0) > 0,
+                  ),
+                  onDark: true,
+                ),
+              ),
             ],
           ),
         ),

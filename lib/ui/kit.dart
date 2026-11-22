@@ -270,3 +270,46 @@ File? blobFile(String? hash) {
   final f = App.I.blobs.fileOf(hash);
   return f.existsSync() ? f : null;
 }
+
+/// 影视卡片的观看状态文案。
+String watchStatus({
+  required int progress,
+  required bool done,
+  required bool started,
+}) {
+  if (done) return '看完';
+  if (started) return '在看';
+  return '想看';
+}
+
+/// 卡片右下角的小状态胶囊（想看 / 在看 / 看完）。
+class StatusPill extends StatelessWidget {
+  const StatusPill({super.key, required this.label, this.onDark = false});
+
+  final String label;
+  final bool onDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg;
+    if (label == '看完') {
+      fg = const Color(0xFF8FD6A6);
+    } else if (label == '在看') {
+      fg = const Color(0xFFA7C4FF);
+    } else {
+      fg = onDark ? const Color(0xFFD6DCE8) : C.text2;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: fg.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontSize: 9, height: 1.2, color: fg, letterSpacing: 0.3),
+      ),
+    );
+  }
+}

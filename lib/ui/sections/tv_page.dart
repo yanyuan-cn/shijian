@@ -167,6 +167,23 @@ class _Card extends StatelessWidget {
                   ),
                 ),
               ),
+              // 右上角：想看 / 在看 / 看完
+              Positioned(
+                right: 12,
+                top: 12,
+                child: StatusPill(
+                  label: watchStatus(
+                    progress: seen,
+                    done: item.totalEps > 0
+                        ? item.seenEps >= item.totalEps
+                        : seen >= 100,
+                    started: item.totalEps > 0
+                        ? item.seenEps > 0
+                        : seen > 0,
+                  ),
+                  onDark: true,
+                ),
+              ),
               Positioned(
                 left: 16,
                 right: 16,

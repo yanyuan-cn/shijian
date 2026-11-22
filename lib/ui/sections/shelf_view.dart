@@ -419,9 +419,9 @@ class _ShelfViewState extends State<ShelfView>
   /// 这样旋转后的屏幕偏移恰好是 (i - pos) * gap * cos26°，pos 那一本永远精确落在正中，
   /// 不再依赖 off/pull 之类的经验补偿（那些补偿只在 CSS 的 left:50% 布局下成立）。
   Widget _rig(List<Item> books, _Geo g, double pos) {
-    // 每本书的盒子里除了书脊，右侧还挂着一条封面窄条（视觉上属于这本书）；
-    // 盒子居中时书脊会偏左，所以整体右移半个「封面超出书脊」的量，让聚焦那本的**书脊**落在正中。
-    const shift = 0.0; // 书脊在盒子里本来就是居中的，不需要额外补偿
+    // 每本书的盒子宽度是 bkW（书脊 bkT + 右侧封面窄条），书脊贴在盒子左边；
+    // 盒子居中时书脊会偏左 (bkW - t)/2，整体右移回来，聚焦那本的**书脊**才落在正中。
+    final shift = (g.bkW - g.t) / 2;
     final rig = Matrix4.identity()
       ..setEntry(3, 2, -1 / 1500) // CSS perspective:1500px → 必须是负值
       ..translate(shift, 0.0, 0.0)
@@ -527,9 +527,11 @@ class _Book extends StatelessWidget {
           // 而 rig 又会整体再压一次 cos26°，所以这里除回来 *1/cos26，
           // 即 tan26/cos26。竖条左端压进书脊 10px，右端被下一本书挡住。
           Positioned(
-            left: geo.t - 10,
+            left: geo.t - 2,
             top: 0,
-            width: math.min(geo.bkW * 0.488 / 0.899, geo.gap - geo.t + 10),
+            // 封面按 -26° 的投影宽度铺开，但只露出「到下一本书脊前」那一条（≈26px）：
+            // 铺满整宽的话，全排最后一本没有邻居遮挡，会变成一大块空面板。
+            width: math.min(geo.bkW * 0.488 / 0.899, geo.gap - geo.t + 4),
             height: geo.h,
             child: _CoverFace(item: item, index: index, focus: focus),
           ),

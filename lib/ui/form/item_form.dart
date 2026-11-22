@@ -649,10 +649,17 @@ class _ItemFormState extends State<ItemForm> {
     final out = <Widget>[];
     final fields = _spec.fields;
     // 两列成对排布：half=true 的连续字段两两并排。
+    // 多选（类型）要占满整行，否则 chips 挤在半栏里会堆成一列长条。
+    bool halfPair(int k) =>
+        fields[k].half &&
+        fields[k].kind != FieldKind.multi &&
+        k + 1 < fields.length &&
+        fields[k + 1].half &&
+        fields[k + 1].kind != FieldKind.multi;
     var i = 0;
     while (i < fields.length) {
       final f = fields[i];
-      if (f.half && i + 1 < fields.length && fields[i + 1].half) {
+      if (halfPair(i)) {
         out.add(Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -684,6 +691,31 @@ class _ItemFormState extends State<ItemForm> {
               children: [
                 for (final o in f.options)
                   _chip(o, _status == o, () => setState(() => _status = o)),
+              ],
+            ),
+          ],
+        );
+      case FieldKind.multi:
+        final cur = _splitMulti(_ctl[f.key]?.text ?? '');
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _label(f.label),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final o in f.options)
+                  _chip(o, cur.contains(o), () {
+                    final next = [...cur];
+                    if (next.contains(o)) {
+                      next.remove(o);
+                    } else {
+                      next.add(o);
+                    }
+                    setState(() => _ctl[f.key]!.text = next.join(' / '));
+                  }),
               ],
             ),
           ],
@@ -746,6 +778,16 @@ class _ItemFormState extends State<ItemForm> {
           ],
         );
     }
+  }
+
+  /// 多选字段（类型）：把「/、,」分隔的字符串拆成集合。
+  List<String> _splitMulti(String s) {
+    if (s.trim().isEmpty) return <String>[];
+    return s
+        .split(RegExp(r'[/,、，]'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
   }
 
   Widget _chip(String text, bool on, VoidCallback onTap) {

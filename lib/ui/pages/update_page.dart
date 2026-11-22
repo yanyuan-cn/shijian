@@ -9,10 +9,19 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.9.0';
+  static const String current = '1.10.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.10.0',
+      [
+        '书架：封面不再被压成一条窄缝，按斜视角铺开，边缘那本也能看到完整的封面',
+        '书架：封面与书脊的上下边对齐，不再有错位的顶边',
+        '影视：卡片角落显示「想看 / 在看 / 看完」，一眼看出进度',
+        '影视：「类型」从手输改成多选（剧情、科幻、悬疑…），选中即用',
+      ],
+    ),
     (
       '1.9.0',
       [

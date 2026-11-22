@@ -4,7 +4,14 @@
 /// 搜索、导入导出、备份全都不用动。
 library;
 
-enum FieldKind { text, number, multiline, choice, tags, image, color }
+enum FieldKind { text, number, multiline, choice, multi, tags, image, color }
+
+/// 影视「类型」的预设项（可多选，也可自己补）。
+const List<String> kGenres = [
+  '剧情', '喜剧', '动作', '科幻', '爱情', '悬疑', '犯罪', '惊悚',
+  '恐怖', '奇幻', '冒险', '动画', '纪录片', '历史', '战争', '音乐',
+  '家庭', '武侠', '古装', '真人秀',
+];
 
 class FieldSpec {
   const FieldSpec(
@@ -78,7 +85,8 @@ class SectionSpec {
       FieldSpec('creator', label: '导演', half: true),
       FieldSpec('year', label: '年份', half: true, kind: FieldKind.number),
       FieldSpec('m:dur', label: '片长', half: true, hint: '165 分钟'),
-      FieldSpec('m:genre', label: '类型', half: true, hint: '剧情 / 音乐'),
+      FieldSpec('m:genre', label: '类型', half: true,
+          kind: FieldKind.multi, options: kGenres),
       FieldSpec('rating', label: '评分', half: true, kind: FieldKind.number),
       FieldSpec('m:tags', label: '标签', kind: FieldKind.tags, half: true),
       FieldSpec('note', label: '简介 / 备注', kind: FieldKind.multiline),
@@ -96,7 +104,8 @@ class SectionSpec {
       FieldSpec('year', label: '年份', half: true, kind: FieldKind.number),
       FieldSpec('m:ep', label: '总集数', half: true, kind: FieldKind.number),
       FieldSpec('m:seen', label: '已看集数', half: true, kind: FieldKind.number),
-      FieldSpec('m:genre', label: '类型', half: true),
+      FieldSpec('m:genre', label: '类型', half: true,
+          kind: FieldKind.multi, options: kGenres),
       FieldSpec('rating', label: '评分', half: true, kind: FieldKind.number),
       FieldSpec('m:tags', label: '标签', kind: FieldKind.tags, half: true),
       FieldSpec('note', label: '简介 / 备注', kind: FieldKind.multiline),
