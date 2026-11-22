@@ -529,7 +529,7 @@ class _Book extends StatelessWidget {
           Positioned(
             left: geo.t - 10,
             top: 0,
-            width: geo.bkW * 0.488 / 0.899,
+            width: math.min(geo.bkW * 0.488 / 0.899, geo.gap - geo.t + 10),
             height: geo.h,
             child: _CoverFace(item: item, index: index, focus: focus),
           ),

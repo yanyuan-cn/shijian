@@ -9,10 +9,24 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.6.0';
+  static const String current = '1.7.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.7.0',
+      [
+        '阅读器解析层重写：txt 的硬换行会被重排成真正的段落，不再一句一行',
+        '目录页识别：原书里那串「1. / 2. / 3. …」的目录页不再被当正文，而是拿来生成目录',
+        '章节识别支持多种写法：第X章、第X节、数字编号、一二三、序言/后记/尾声/楔子',
+        '排版有层级了：章标题加大加粗并单独成段，正文首行缩进两格、两端对齐',
+        '图注（作者·年份·材质·馆藏）自动识别成小号灰字',
+        'epub 用自带的 nav/NCX 目录，章节名就是出版方写的那个',
+        '「目录」按钮挪到底部控制条，和字号、主题、翻页放在一起',
+        '新增仿真翻页：左右翻页时可以拖着书页走，松手按力度翻或弹回',
+        '修复：书架最后一本书的封面会整块露出来',
+      ],
+    ),
     (
       '1.6.0',
       [
