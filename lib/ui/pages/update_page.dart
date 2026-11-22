@@ -9,10 +9,18 @@ import '../theme.dart';
 class UpdatePage extends StatefulWidget {
   const UpdatePage({super.key});
 
-  static const String current = '1.8.0';
+  static const String current = '1.9.0';
 
   /// 更新日志：新的在最上面。
   static const List<(String, List<String>)> log = [
+    (
+      '1.9.0',
+      [
+        '每段恢复首行缩进两个字（epub 那条解析路径把缩进写在块外面，切片时被切掉了）',
+        'PDF 现在能直接看了：不重排，按原样一页页显示，可双指放大、会记进度',
+        'epub 里以引号开头的段落也统一缩进，不再出现「一段有缩进一段没有」',
+      ],
+    ),
     (
       '1.8.0',
       [

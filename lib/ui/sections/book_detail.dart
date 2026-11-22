@@ -8,6 +8,7 @@ import '../../data/app_state.dart';
 import '../form/item_form.dart';
 import '../kit.dart';
 import '../reader/reader_page.dart';
+import '../reader/pdf_page.dart';
 import '../theme.dart';
 import 'shelf_view.dart' show BookCoverArt;
 
@@ -72,15 +73,27 @@ class _BookDetailPageState extends State<BookDetailPage> {
     }
     final mime = (book.first.mime ?? '').toLowerCase();
     final name = (book.first.name ?? '').toLowerCase();
-    final unreadable = mime.contains('pdf') ||
-        mime.contains('mobipocket') ||
+    final isPdf = mime.contains('pdf') || name.endsWith('.pdf');
+    final unreadable = mime.contains('mobipocket') ||
         mime.contains('amazon') ||
-        name.endsWith('.pdf') ||
         name.endsWith('.mobi') ||
         name.endsWith('.azw3');
     if (unreadable) {
       if (!mounted) return;
-      toast(context, '这个格式只做了归档，暂时读不了正文（支持 txt / epub）');
+      toast(context, '这个格式只做了归档，暂时读不了正文（支持 txt / epub / pdf）');
+      return;
+    }
+    if (isPdf) {
+      // PDF 不做重排，按原样一页一页显示。
+      final f = App.I.blobs.fileOf(book.first.hash);
+      if (!f.existsSync()) {
+        toast(context, '这个 PDF 读不出来，可能文件丢了');
+        return;
+      }
+      final bytes = await f.readAsBytes();
+      if (!mounted) return;
+      await PdfReaderPage.open(context, _live, bytes);
+      if (mounted) setState(() => _changed = true);
       return;
     }
     if (!mounted) return;

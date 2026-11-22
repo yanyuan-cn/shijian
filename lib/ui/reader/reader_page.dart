@@ -141,9 +141,24 @@ class _ReaderPageState extends State<ReaderPage> {
       if (to <= from) continue;
       final txt = doc.text.substring(from, to);
       final heading = b.kind == BlockKind.heading;
-      kids.add(Text(
-        txt.trimRight(),
-        style: _styleFor(b.kind, b.level),
+      // Flutter 排版会把行首的空格吃掉（U+3000 也算），所以首行缩进
+      // 不能靠文本里的全角空格，得用一个固定宽度的占位块顶出来。
+      final raw = txt.trimRight();
+      final indent = !heading &&
+          (b.kind == BlockKind.para || b.kind == BlockKind.quote) &&
+          raw.startsWith('\u3000\u3000');
+      final body = indent ? raw.substring(2) : raw;
+      final style = _styleFor(b.kind, b.level);
+      kids.add(Text.rich(
+        TextSpan(children: [
+          if (indent)
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: SizedBox(width: (style.fontSize ?? _fontSize) * 2),
+            ),
+          TextSpan(text: body),
+        ]),
+        style: style,
         textAlign: heading ? TextAlign.center : TextAlign.justify,
       ));
     }

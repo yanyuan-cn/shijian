@@ -107,7 +107,10 @@ EbookDoc _parseTxt(Uint8List bytes, String name) {
           level: last.level));
     }
     final start = buf.length; // 缩进也算进块里，否则排版时会被丢掉
-    if (indent && kind == BlockKind.para) buf.write('\u3000\u3000');
+    if (indent &&
+        (kind == BlockKind.para || kind == BlockKind.quote)) {
+      buf.write('\u3000\u3000');
+    }
     buf.write(text);
     blocks.add(EbookBlock(kind, start, buf.length, level: level));
     if (kind == BlockKind.heading) {
@@ -421,8 +424,17 @@ EbookDoc _parseEpub(Uint8List bytes, String name) {
 
   void add(BlockKind kind, String text, {int level = 0, bool indent = true}) {
     if (buf.isNotEmpty) buf.write('\n\n');
-    if (indent && kind == BlockKind.para) buf.write('\u3000\u3000');
-    final start = buf.length;
+    // 块间空行归上一块，否则切片时分隔符不在任何块里，段落会黏成一行。
+    if (blocks.isNotEmpty) {
+      final last = blocks.removeLast();
+      blocks.add(EbookBlock(last.kind, last.offset, buf.length,
+          level: last.level));
+    }
+    final start = buf.length; // 缩进要在 start 之后写，否则会被切掉
+    if (indent &&
+        (kind == BlockKind.para || kind == BlockKind.quote)) {
+      buf.write('\u3000\u3000');
+    }
     buf.write(text);
     blocks.add(EbookBlock(kind, start, buf.length, level: level));
     if (kind == BlockKind.heading) {
