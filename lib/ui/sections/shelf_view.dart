@@ -509,8 +509,11 @@ class _Book extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final coverW = geo.bkW * 0.46;
+    final coverW = geo.t * 1.95;
     if (part == _BookPart.cover) {
+      // 封面就画成一个竖直的矩形：与书脊同高、上沿对齐，
+      // 靠「越靠外越暗」的横向渐变表达侧面的受光衰减——
+      // 不再用错切/透视，避免出现那种歪着的诡异角度。
       return SizedBox(
         width: geo.t,
         height: geo.h,
@@ -519,16 +522,32 @@ class _Book extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Positioned(
-              left: geo.t - 2,
-              top: -4, // 与书脊顶部那条受光切面对齐，避免右上角露出缝
+              left: geo.t - 1,
+              top: 5,
               width: coverW,
-              height: geo.h + 4,
-              child: Transform(
-                alignment: Alignment.centerLeft,
-                transform: Matrix4.identity()
-                  ..setEntry(0, 1, -0.06)
-                  ..setEntry(3, 2, 0.0005),
+              height: geo.h - 10,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0x00000000),
+                      Color(0x22000000),
+                      Color(0x66000000),
+                    ],
+                    stops: [0.0, 0.55, 1.0],
+                  ),
+                ),
                 child: _CoverFace(item: item, index: index, focus: focus),
+              ),
+            ),
+            // 上沿一条受光线，和书脊顶部那条切面对齐
+            Positioned(
+              left: geo.t - 1,
+              top: 0,
+              width: coverW,
+              height: 1.6,
+              child: ColoredBox(
+                color: Colors.white.withValues(alpha: 0.16 + 0.10 * focus),
               ),
             ),
           ],
